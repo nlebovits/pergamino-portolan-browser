@@ -78,3 +78,65 @@ One canonical home per fact. If a value like a color, URL, or policy line exists
 <!-- Add instructions for this repo below. The block above is overwritten by
      sync. This file is the only home for repo-specific agent rules: CLAUDE.md
      carries the import and nothing else. -->
+
+This repository is the IDE Pergamino browser. It is a fork of
+[portolan-browser](https://github.com/portolan-sdi/portolan-browser) at commit
+`9fdf9cb`, and it serves one catalog:
+`https://data.source.coop/nlebovits/pergamino-ide/catalog.json`. The catalog
+source is [nlebovits/pergamino-ide-catalog](https://github.com/nlebovits/pergamino-ide-catalog).
+The license stays ISC.
+
+## Where the customization lives
+
+The files below make this an IDE Pergamino browser. Change these files only.
+Keep the rest of the tree equal to upstream, so `git pull upstream main` causes
+few conflicts.
+
+| File | Owns |
+| --- | --- |
+| `config.js` | Catalog URL, title, `es` as the only locale, footer links |
+| `src/locales/es/custom.json` | "Capa", "Categoría" and "Archivo" in place of the STAC nouns, the 39 keys missing from upstream `es`, and the `pergamino.*` strings |
+| `src/theme/variables.scss` | The `$per-*` palette and Montserrat, each value with its GeoNode source |
+| `src/theme/custom.scss` | Component styles that use those variables |
+| `index.html` | `lang="es"`, favicons, the Montserrat link, meta tags |
+| `public/pergamino/` | The white municipal logo and the favicons from pergamino.ar |
+| `src/components/PerHeader.vue` | The gradient brand bar and the `#404040` action band. It replaces the upstream `.site` row and passes every prop and event through. |
+| `src/components/PerHome.vue` + `src/utils/perHome.js` | The home view: the topic grid with counts and the "Por fuente" chips |
+| `tests/unit/perHome.spec.js` | Unit tests for the home accessors |
+| `basemaps.config.js` | `MAP_CONSTRAINTS`, from the bbox of `limites/partido_pergamino` |
+| `verify-pergamino.mjs` | Browser checks at desktop and mobile size |
+| `.github/workflows/deploy-demo.yml` | Manual deploy only. A push to `main` does not publish. |
+
+Brand values have one home, the `$per-*` variables in `variables.scss`. Do not
+put a hex literal in a component.
+
+These upstream files carry small supporting edits:
+
+- `src/StacBrowser.vue` mounts `PerHeader` in place of the `.site` row.
+- `src/views/Catalog.vue` mounts `PerHome` on the root, hides the root
+  description column, filters the grid by `?.fuente=`, and names an
+  all-collection grid "Capas".
+- `src/components/maps/MapMixin.js` spreads `MAP_CONSTRAINTS` into the map.
+
+## Rules for this repository
+
+- Never edit the catalog from here. Report a catalog defect in
+  pergamino-ide-catalog.
+- Never key browser behavior to a collection id. The home view reads topics,
+  counts and producers from the catalog at run time.
+- Report a defect that every portolan-browser deployment has upstream. Do not
+  patch it here unless a person approves the patch.
+
+## Verify a change
+
+```bash
+npx serve ../pergamino-ide-catalog/catalog --cors -l 8081 &
+SB_catalogUrl=http://localhost:8081/catalog.json \
+  node_modules/.bin/vite --port 8080 --strictPort &
+pnpm run lint
+pnpm run test:unit
+CATALOG_URL=http://localhost:8081/catalog.json \
+  node verify-pergamino.mjs
+```
+
+A `CATALOG` line in the output is a catalog finding. It does not fail the run.

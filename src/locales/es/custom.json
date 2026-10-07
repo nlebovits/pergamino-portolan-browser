@@ -3,6 +3,117 @@
     "description": ""
   },
   "fields": {
-    
+
+  },
+  "stacCatalog": "Categoría | Categorías",
+  "stacCollection": "Capa | Capas",
+  "stacAssets": "Archivo | Archivos",
+  "builtOn": "construido sobre",
+  "assets": {
+    "currentlyShown": "Este es el archivo que se muestra actualmente.",
+    "formatHelp": "Más información sobre la conversión de formatos",
+    "inItems": "Archivo en elementos | Archivos en elementos"
+  },
+  "catalogs": {
+    "filterByTitle": "Filtrar categorías por título",
+    "filterByTitleAndMore": "Filtrar por título, descripción o palabras clave",
+    "noMatches": "Ninguna categoría o capa coincide con la búsqueda."
+  },
+  "errors": {
+    "invalidStacCollections": "La respuesta de la API no es una lista válida de capas STAC.",
+    "loadApiCollectionsFailed": "No se pudieron cargar las capas de la API.",
+    "missingPermissions": "Las credenciales de esta solicitud no tienen los permisos necesarios."
+  },
+  "goToCollection": {
+    "description": "Ir a la capa asociada",
+    "label": "Capa"
+  },
+  "index": {
+    "portolanRegistry": "registro de Portolan",
+    "registryCollections": "{count} capa | {count} capas",
+    "registryCountsPartial": "{counts} hasta ahora",
+    "registryFeatures": "{count} objeto | {count} objetos",
+    "registryLoading": "Cargando el registro de Portolan…",
+    "registryUnavailable": "No se pudo cargar el registro de Portolan. Puede ingresar la URL de un catálogo arriba.",
+    "selectFromRegistry": "... o seleccione un catálogo del {registry}:",
+    "searchRegistry": "Buscar en el registro por nombre o URL",
+    "searchRegistryNoMatch": "Ningún catálogo registrado coincide con \"{query}\"."
+  },
+  "items": {
+    "filterChangesNotApplied": "Los filtros cambiaron, pero los cambios todavía no se aplicaron.",
+    "noneAvailableForCollection": "No hay elementos disponibles para esta capa."
+  },
+  "manage": {
+    "addCollection": "Agregar capa",
+    "addItem": "Agregar elemento",
+    "confirmDeleteTitle": "Confirmar eliminación",
+    "confirmDeleteMessage": "¿Seguro que desea eliminar este recurso STAC?",
+    "create": "Crear",
+    "delete": "Eliminar",
+    "discardDraft": "Descartar los cambios restaurados",
+    "draftRestored": "Se restauraron cambios sin guardar de una sesión anterior.",
+    "edit": "Editar",
+    "leavePage": "Salir de la página",
+    "save": "Guardar",
+    "noUndo": "Esta acción no se puede deshacer.",
+    "unsavedChangesLeave": "Hay cambios sin guardar. ¿Desea salir de esta página?",
+    "unsavedChangesTitle": "Cambios sin guardar",
+    "validate": "Validar"
+  },
+  "mapping": {
+    "layers": {
+      "overflow": "{count} capa(s) más sin mostrar"
+    },
+    "styles": {
+      "legend": "Leyenda",
+      "select": "Seleccionar estilo del mapa"
+    },
+    "vectorFallback": {
+      "loadError": "No se pudieron cargar los datos GeoParquet para mostrarlos.",
+      "reprojectionFailed": "Ningún objeto se pudo ubicar en el mapa. El archivo declara {crs}, pero sus coordenadas quedan fuera de ese sistema. Es posible que el CRS declarado no coincida con los datos.",
+      "tooBig": "El archivo GeoParquet es demasiado grande para cargarlo en el mapa ({size} MB, límite {maxSize} MB).",
+      "tooLarge": "Los datos GeoParquet tienen {count} objetos, demasiados para mostrarlos en el mapa (límite: {max})."
+    }
+  },
+  "metadata": {
+    "additional": "Metadatos adicionales"
+  },
+  "search": {
+    "addCollections": "Presione Enter para agregar una capa",
+    "disabledDueToSingleDate": "El filtro está desactivado porque la capa tiene una única fecha y hora como extensión temporal.",
+    "droppedFilters": "Estos filtros no se admiten aquí y se quitaron: {filters}.",
+    "enterCollections": "Ingrese una o varias capas...",
+    "filterCollection": "Filtrar capa",
+    "selectCollections": "Seleccione una o varias capas...",
+    "tabs": {
+      "collections": "Buscar capas"
+    },
+    "useInItemSearch": "Abrir la capa en la búsqueda de elementos | Abrir {count} capas en la búsqueda de elementos"
+  },
+  "source": {
+    "manage": "Administrar"
+  },
+  "tree": {
+    "moreCollectionPagesAvailable": "más páginas disponibles para la capa"
+  },
+  "widgets": {
+    "featured": "Destacado"
+  },
+  "pergamino": {
+    "subtitle": "Infraestructura de Datos Espaciales · Municipalidad de Pergamino",
+    "logoAlt": "Municipalidad de Pergamino",
+    "browse": "Categorías",
+    "search": "Buscar",
+    "summary": "{layers} en {categories}",
+    "layerCount": "{count} capa | {count} capas",
+    "categoryCount": "{count} categoría | {count} categorías",
+    "topicsHeading": "Categorías",
+    "seeAll": "Ver la capa | Ver las {count} capas",
+    "seeCategory": "Ver la categoría",
+    "bySource": "Por fuente",
+    "bySourceLoading": "Cargando las fuentes…",
+    "filteredBy": "Capas de {source}",
+    "clearFilter": "Quitar filtro",
+    "noLayersForSource": "Ninguna capa cargada coincide con esta fuente."
   }
 }

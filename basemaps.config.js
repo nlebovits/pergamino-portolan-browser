@@ -86,3 +86,23 @@ export default function configureBasemap(stac) {
   }
   return layers;
 }
+
+/**
+ * Bounds and zoom limits for every map in the IDE Pergamino browser. MapMixin
+ * spreads them into the MapLibre constructor.
+ *
+ * Source: the bbox of the `limites/partido_pergamino` collection,
+ * [-60.9440479, -34.176559, -60.138792, -33.5402169]. `maxBounds` pads that
+ * bbox by its own width and height on each side, so the neighbouring areas in
+ * `limites/localidades` stay on the map. `center` is the bbox midpoint.
+ * `zoom` is the home view of the old viewer,
+ * https://geonode.pergamino.gob.ar/visor/es#8.48/-33.861/-60.543.
+ * `minZoom` and `maxZoom` are chosen, not sampled.
+ */
+export const MAP_CONSTRAINTS = {
+  center: [-60.54, -33.86],
+  zoom: 8.5,
+  minZoom: 8,
+  maxZoom: 19,
+  maxBounds: [[-61.75, -34.82], [-59.33, -32.90]]
+};

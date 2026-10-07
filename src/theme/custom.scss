@@ -1,10 +1,18 @@
 @import "variables";
 
+// IDE Pergamino overrides. Every colour comes from a $per-* variable in
+// variables.scss. Do not put a hex literal here.
+
 #stac-browser {
-  // The bar's colour comes from $header / $header-background in variables.scss.
-  // Only the accent rule under it lives here.
-  > header .site {
-    border-bottom: 2px solid $primary;
+  // PerHeader spans the viewport with calc(50% - 50vw). Clip so that the
+  // 50vw term cannot add a horizontal scrollbar.
+  overflow-x: clip;
+
+  // PerHeader carries the `site` class, so the upstream mobile scroll-hide
+  // measures it. Remove the padding and background of the upstream row.
+  > header .site.per-header {
+    padding: 0;
+    background: none;
   }
 
   > header .page {
@@ -12,60 +20,94 @@
     padding-bottom: 0.5rem;
 
     h1 {
-      color: #202a4f;
+      color: $per-ink;
     }
   }
 
   h2 {
-    color: #202a4f;
-    font-weight: 700;
-    letter-spacing: -0.01em;
+    color: $per-ink;
+    font-weight: $per-weight-title;
   }
 
+  // The GeoNode resource card.
   .card {
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    border-radius: 0.5rem;
+    border: 1px solid $per-card-border;
+    border-radius: $per-radius;
+    box-shadow: $per-card-shadow;
     transition: box-shadow 0.15s ease, border-color 0.15s ease;
 
     &:hover {
-      border-color: rgba(65, 99, 204, 0.3);
-      box-shadow: 0 2px 8px rgba(65, 99, 204, 0.1);
+      border-color: rgba($per-ink, 0.35);
+      box-shadow: 0 0.25rem 0.6rem rgba($per-ink, 0.15);
+    }
+  }
+
+  // Card titles are links, but the whole card reads as one target. Underline
+  // only on hover and focus, as GeoNode does.
+  .card a,
+  .catalog-card a,
+  .stac-link {
+    text-decoration: none;
+
+    &:hover,
+    &:focus {
+      text-decoration: underline;
     }
   }
 
   .catalog-card .card-title {
-    font-family: "Archivo", sans-serif;
-    font-weight: 600;
+    font-family: $headings-font-family;
+    font-weight: $per-weight-title;
     font-size: 1.05rem;
   }
 
   .catalog-card .intro {
-    color: #343e63;
+    color: $per-ink-soft;
     font-size: 0.875rem;
     line-height: 1.6;
   }
 
+  // The GeoNode .btn-primary: dark ink, white 600-weight label, 5px corners.
   .btn-primary {
-    font-weight: 500;
+    font-weight: $per-weight-label;
+    --bs-btn-hover-bg: #{$per-ink-hover};
+    --bs-btn-hover-border-color: #{$per-ink-hover};
   }
 
   .btn-outline-primary {
-    font-weight: 500;
+    font-weight: $per-weight-label;
   }
 
+  .btn {
+    text-decoration: none;
+  }
+
+  // The GeoNode footer: the same gradient as the brand bar.
   > footer {
-    border-top: 1px solid #d4d8e8;
-    padding-top: 1rem;
     margin-top: 1rem;
+    margin-inline: calc(50% - 50vw);
+    padding: 1rem calc(50vw - 50% + #{$block-gap});
+    border-top: 0;
+    background: $per-gradient;
+    color: $per-footer-ink;
+
+    .text-body-secondary {
+      color: $per-footer-ink !important;
+    }
+
+    a {
+      color: $per-footer-ink;
+      font-weight: $per-weight-label;
+    }
   }
 
   .description {
-    color: #343e63;
+    color: $per-ink-soft;
     line-height: 1.7;
   }
 
   .badge {
-    font-weight: 500;
+    font-weight: $per-weight-label;
     letter-spacing: 0.02em;
   }
 }

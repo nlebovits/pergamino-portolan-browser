@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────
-// Default themes for STAC Browser (light and dark mode).
+// IDE Pergamino theme.
 //
 // Most of the variables below are Bootstrap variables.
 // For Bootstrap's full variable reference see:
@@ -13,12 +13,57 @@
 @import "bootstrap/scss/_functions";
 
 // ─────────────────────────────────────────────────────────
+// IDE PERGAMINO BRAND PALETTE
+// Sampled from https://geonode.pergamino.gob.ar/ with getComputedStyle.
+// "custom" is the inline <style> block "ESTILOS PERSONALIZADOS GEONODE 4.4".
+// "geonode.css" is /static/mapstore/dist/themes/geonode.css.
+// Components reference these variables and never the literals.
+// ─────────────────────────────────────────────────────────
+
+// custom: #gn-brand-navbar and .msgapi footer, linear-gradient(to right, ...)
+$per-gradient-start: #fbcd49;
+$per-gradient-end:   #f07faf;
+$per-gradient:       linear-gradient(to right, $per-gradient-start, $per-gradient-end);
+// custom: :root --color-principal. Body text, links, buttons, the #gn-topbar strip.
+$per-ink:            #404040;
+// custom: .btn-primary:hover and #gn-topbar a:hover
+$per-ink-hover:      #5a5a5a;
+// custom: .gn-hero-description
+$per-ink-soft:       #4d4d4d;
+// geonode.css: --gn-main-border-color
+$per-border:         #ddd;
+// geonode.css: .gn-resource-card border and box-shadow
+$per-card-border:    rgba(0, 0, 0, 0.125);
+$per-card-shadow:    0 0.125rem 0.25rem rgba(0, 0, 0, 0.08);
+// custom: #gn-search-bar-apply background, border, and :hover background
+$per-search-bg:      #f5f5f5;
+$per-search-border:  #e0e0e0;
+$per-search-hover:   #ebebeb;
+// custom: .msgapi .gn-search-bar button box-shadow
+$per-search-shadow:  0 2px 4px rgba(0, 0, 0, 0.2);
+// geonode.css: .gn-footer color, var(--gn-footer-color) default. Also used for
+// the footer links: the sampled link blue (#397aab) gives only 1.8:1 to 3.1:1
+// on the gradient, under the WCAG AA minimum of 4.5:1.
+$per-footer-ink:     #000;
+// custom: :root --gn-button-danger-bg
+$per-danger:         #a3131c;
+// custom: .btn-primary, .gn-resource-card, .gn-search-bar border-radius
+$per-radius:         5px;
+// custom: #gn-topbar a and .btn-primary font-weight; .card-title a font-weight
+$per-weight-label:   600;
+$per-weight-title:   700;
+
+// Heights of the two PerHeader strips. Chosen, not sampled. GeoNode sets
+// min-height: 3rem on both bars (custom: .msgapi .gn-menu); the brand bar is
+// taller here to fit the municipal logo at a legible size.
+$per-bar-height:     4rem;
+$per-band-height:    3rem;
+
+// ─────────────────────────────────────────────────────────
 // GENERAL — color-neutral settings that apply in both modes
 // ─────────────────────────────────────────────────────────
 
 // STAC Browser custom variables
-// Upstream renamed $logo-image-height to $logo-height in 5.0.0; 2.5rem is
-// Portolan's value, the Archivo wordmark needs the extra height.
 $logo-height: 2.5rem;
 // Margin between the main sections of the page (header, content, footer)
 $block-gap: 1rem;
@@ -46,26 +91,29 @@ $grid-breakpoints: (
 // Font size
 $font-size-base: 0.95rem;
 // Fonts for normal text
-$font-family-sans-serif: "Archivo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+// GeoNode: [data-ms2-container] font-family var(--gn-font-family-base, "Montserrat", sans-serif)
+$font-family-sans-serif: "Montserrat", sans-serif;
 // Fonts for headings
-$headings-font-family: "Archivo", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+$headings-font-family: "Montserrat", sans-serif;
 // Fonts for code
 $font-family-monospace: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
 // Heading sizes
 $h1-font-size: 2rem;
-$h1-font-weight: 600;
+$h1-font-weight: $per-weight-title;
 $h2-font-size: 1.4rem;
-$h2-font-weight: 600;
+$h2-font-weight: $per-weight-title;
 $h3-font-size: 1.25rem;
 $h4-font-size: 1.1rem;
 
 // Link decoration (non-color)
-$link-decoration: none;
+// Chosen, not sampled. GeoNode links share the body colour (#404040), so an
+// underline is the only cue that text is a link.
+$link-decoration: underline;
 $link-hover-decoration: underline;
 
 // Border radius
-$border-radius: 0.375rem;
+$border-radius: $per-radius;
 
 // ─────────────────────────────────────────────────────────
 // LIGHT MODE — colors and color-derived values
@@ -73,34 +121,34 @@ $border-radius: 0.375rem;
 
 // Background and text default colors
 $body-bg: white;
-$body-color: #202a4f;
+$body-color: $per-ink;
 
 // Theme colors — the Portolan palette
-$primary:   #4163cc;
-$secondary: #343e63;
+$primary:   $per-ink;
+$secondary: $per-ink-soft;
 $success:   #2d8659;
 $info:      #3670a0;
 $warning:   #e5a100;
-$danger:    #c44040;
+$danger:    $per-danger;
 $light:     #f5f7fb; // light means muted
-$dark:      #202a4f; // dark means highlighted
+$dark:      $per-ink; // dark means highlighted
 
 // Heading colors
-$headings-color: #202a4f;
+$headings-color: $per-ink;
 $h1-color: inherit;
 $subheadings-color: $secondary; // h2 only
 
 // Link colors
 $link-color: $primary;
-$link-hover-color: darken($link-color, 20%);
+$link-hover-color: $per-ink-hover;
 
 @import 'bootstrap/scss/_variables';
 
 // Main/top header of the website.
-// Portolan keeps the near-white site bar it had before the 5.0.0 header
-// redesign, rather than upstream's gradient built from $primary.
-$header: #fafbfc;
-$header-background: $header; // flat, not upstream's linear-gradient
+// PerHeader draws the GeoNode gradient itself. $header is the gradient's
+// start colour, so colour-contrast() picks dark ink for text on it.
+$header: $per-gradient-start;
+$header-background: $per-gradient;
 $header-position: sticky; // sticky or static
 $header-font-size: 1.5rem;
 $header-font-weight: 600;
