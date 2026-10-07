@@ -9,7 +9,8 @@ jobs:
     permissions:
       contents: write
     env:
-      SB_pathPrefix: "/"
+      # The site is a project page at /pergamino-portolan-browser/.
+      SB_pathPrefix: "/pergamino-portolan-browser/"
       SB_historyMode: "hash"
     steps:
       - uses: actions/checkout@v4
