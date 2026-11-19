@@ -1,76 +1,52 @@
 <template>
   <div class="per-header site">
-    <div class="per-bar">
-      <div class="per-inner">
-        <component :is="root ? 'StacLink' : 'div'" v-bind="root ? { data: root } : {}" class="per-brand">
-          <img :src="logo" :alt="$t('pergamino.logoAlt')" class="per-logo">
-          <span class="per-wordmark">
-            <HeaderTitle ref="headerTitle" />
-            <span class="per-subtitle">{{ $t('pergamino.subtitle') }}</span>
-          </span>
-        </component>
+    <div class="per-inner">
+      <component :is="root ? 'StacLink' : 'div'" v-bind="root ? { data: root } : {}" class="per-brand">
+        <img :src="logo" :alt="$t('pergamino.logoAlt')" class="per-logo">
+        <span class="per-wordmark"><HeaderTitle ref="headerTitle" /></span>
+      </component>
 
-        <nav class="per-user">
-          <button v-if="canAuthenticate" type="button" class="per-plain" :title="authTitle" @click="$emit('logInOut')">
-            <component :is="authIcon" /><span class="per-label">{{ authLabel }}</span>
-          </button>
-          <LanguageChooser
-            v-if="locales.length > 1"
-            class="per-lang"
-            :data="data" :currentLocale="currentLocale" :locales="locales"
-            @set-locale="locale => $emit('setLocale', locale)"
-          />
-          <button v-if="showColorToggle" type="button" class="per-plain" @click="$emit('toggleColorMode')">
-            <BIconSun v-if="colorMode === 'light'" :title="$t('switchToDarkMode')" />
-            <BIconMoonStars v-else :title="$t('switchToLightMode')" />
-          </button>
-        </nav>
-      </div>
-    </div>
-
-    <div v-if="!isServerSelector || canSearch || showRootStats" class="per-band">
-      <nav class="per-inner per-actions">
+      <div class="per-tools">
         <button
-          v-if="!isServerSelector" type="button" class="per-action"
-          :aria-expanded="menuOpen ? 'true' : 'false'" :title="$t('browse')"
-          @click="$emit('toggleSidebar')"
+          v-if="showRootStats" id="popover-root-btn" type="button" class="per-action"
+          :title="serviceType" tabindex="0"
         >
-          <BIconList /><span class="per-label">{{ $t('pergamino.browse') }}</span>
+          {{ $t('pergamino.about') }}
         </button>
-        <router-link
-          v-if="canSearch" :to="searchLink" class="per-action"
-          :class="{ active: isSearchPage }" :title="$t('search.title')"
-        >
-          <BIconSearch /><span class="per-label">{{ $t('pergamino.search') }}</span>
-        </router-link>
-        <button v-if="showRootStats" id="popover-root-btn" type="button" class="per-action per-stats" tabindex="0">
-          <BIconDatabase /><span class="per-label">{{ serviceType }}</span>
+        <button v-if="canAuthenticate" type="button" class="per-action" :title="authTitle" @click="$emit('logInOut')">
+          <component :is="authIcon" /> {{ authLabel }}
         </button>
-      </nav>
+        <LanguageChooser
+          v-if="locales.length > 1"
+          class="per-lang"
+          :data="data" :currentLocale="currentLocale" :locales="locales"
+          @set-locale="locale => $emit('setLocale', locale)"
+        />
+        <button v-if="showColorToggle" type="button" class="per-action" @click="$emit('toggleColorMode')">
+          <BIconSun v-if="colorMode === 'light'" :title="$t('switchToDarkMode')" />
+          <BIconMoonStars v-else :title="$t('switchToLightMode')" />
+        </button>
+      </div>
     </div>
   </div>
 </template>
 
 <script>
 import { defineAsyncComponent } from 'vue';
-import BIconDatabase from '~icons/bi/database';
-import BIconList from '~icons/bi/list';
 import BIconMoonStars from '~icons/bi/moon-stars';
-import BIconSearch from '~icons/bi/search';
 import BIconSun from '~icons/bi/sun';
 import HeaderTitle from './HeaderTitle.vue';
 import StacLink from './StacLink.vue';
 
-// Replaces the upstream `.site` row of StacBrowser.vue. Every prop and event of
-// that row passes through here unchanged, so search, the sidebar, login, the
-// language chooser, the colour toggle and the root statistics popover still work.
+// Replaces the upstream `.site` row of StacBrowser.vue with one white bar:
+// the municipal logo and the wordmark, which link to the home page, and the
+// catalog statistics. The brand gradient is a thin rule under the bar. The
+// site is one page, so the bar has no navigation: no sidebar and no search.
+// Login, the language chooser and the colour toggle still pass through.
 export default {
   name: 'PerHeader',
   components: {
-    BIconDatabase,
-    BIconList,
     BIconMoonStars,
-    BIconSearch,
     BIconSun,
     HeaderTitle,
     LanguageChooser: defineAsyncComponent(() => import('./LanguageChooser.vue')),
@@ -80,26 +56,6 @@ export default {
     root: {
       type: Object,
       default: null
-    },
-    canSearch: {
-      type: Boolean,
-      default: false
-    },
-    isSearchPage: {
-      type: Boolean,
-      default: false
-    },
-    searchLink: {
-      type: [String, Object],
-      default: '/search'
-    },
-    isServerSelector: {
-      type: Boolean,
-      default: false
-    },
-    menuOpen: {
-      type: Boolean,
-      default: false
     },
     showRootStats: {
       type: Boolean,
@@ -146,10 +102,10 @@ export default {
       default: 'light'
     }
   },
-  emits: ['toggleSidebar', 'logInOut', 'setLocale', 'toggleColorMode'],
+  emits: ['logInOut', 'setLocale', 'toggleColorMode'],
   computed: {
     logo() {
-      return `${import.meta.env.BASE_URL}pergamino/logo-municipalidad-blanco.svg`;
+      return `${import.meta.env.BASE_URL}pergamino/logo-municipalidad-tinta.svg`;
     }
   },
   methods: {
@@ -167,69 +123,56 @@ export default {
 @import 'bootstrap/scss/mixins';
 @import "../theme/variables.scss";
 
+// The bar spans the viewport, but sits inside a max-width b-container.
+// custom.scss clips horizontal overflow on #stac-browser, so the 50vw term
+// cannot add a horizontal scrollbar.
 .per-header {
-  // The header sits inside a max-width b-container, but both strips span the
-  // viewport. page.scss clips horizontal overflow on #stac-browser, so the
-  // 50vw term cannot add a horizontal scrollbar.
   margin-inline: calc(50% - 50vw);
+  border-bottom: $per-rule-height solid transparent;
+  border-image: $per-rule 1;
+  background-color: $per-head-bg;
+  color: $per-head-fg;
 }
 
 .per-inner {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 1.25rem;
+  min-height: $per-head-height;
   margin-inline: auto;
   padding-inline: $block-gap;
 
   @include media-breakpoint-up(xxxl) {
     max-width: 75vw;
   }
-}
 
-// The GeoNode brand bar: the yellow to pink gradient with the white municipal logo.
-.per-bar {
-  background: $per-gradient;
-
-  .per-inner {
-    min-height: $per-bar-height;
+  @include media-breakpoint-down(sm) {
+    gap: 0.5rem;
   }
 }
 
-.per-brand {
+#stac-browser .per-brand {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
+  gap: 1.1rem;
   min-width: 0;
-  color: $per-ink;
+  color: $per-head-fg;
   text-decoration: none;
-
-  &:hover,
-  &:focus {
-    color: $per-ink;
-    text-decoration: none;
-  }
 }
 
 .per-logo {
   flex-shrink: 0;
-  height: 2.6rem;
+  height: 2rem;
   width: auto;
-
-  @include media-breakpoint-down(sm) {
-    height: 2rem;
-  }
 }
 
 .per-wordmark {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  padding-left: 0.85rem;
-  border-left: 1px solid rgba($per-ink, 0.35);
-  line-height: 1.15;
+  padding-left: 1.1rem;
+  border-left: 1px solid $per-line;
+  white-space: nowrap;
 
   .header-title {
-    font-size: 1.35rem;
+    font-size: 1rem;
     font-weight: $per-weight-title;
 
     // HeaderTitle draws the root icon when the catalog has one. The municipal
@@ -239,101 +182,53 @@ export default {
     }
   }
 
-  @include media-breakpoint-down(sm) {
-    padding-left: 0.6rem;
-
-    .header-title {
-      font-size: 1.05rem;
-    }
-  }
-}
-
-.per-subtitle {
-  font-size: 0.8rem;
-  font-weight: 400;
-
   @include media-breakpoint-down(md) {
     display: none;
   }
 }
 
-.per-user {
+.per-tools {
   display: flex;
-  align-items: center;
-  gap: 0.25rem;
   margin-left: auto;
+  align-items: center;
+  gap: 2px;
 }
 
-.per-plain {
+#stac-browser .per-action {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.35rem 0.6rem;
+  gap: 0.45rem;
+  padding: 0.5rem 0.75rem;
   border: 0;
   border-radius: $per-radius;
   background: none;
-  color: $per-ink;
-  font-weight: $per-weight-label;
+  color: $per-head-muted;
+  font-size: 0.88rem;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
 
   &:hover,
+  &[aria-current="page"],
+  &[aria-expanded="true"] {
+    background-color: $per-head-hover;
+    color: $per-head-fg;
+  }
+
+  @include media-breakpoint-down(sm) {
+    padding: 0.5rem;
+  }
+
   &:focus-visible {
-    background-color: rgba(white, 0.35);
+    outline: 2px solid $per-rosa;
+    outline-offset: 1px;
   }
 }
 
 .per-lang .btn {
   border: 0;
   background-color: transparent;
-  color: $per-ink;
-  font-weight: $per-weight-label;
+  color: $per-head-muted;
 }
 
-// The GeoNode #gn-topbar strip: dark ink, white 600-weight labels, lighter on hover.
-.per-band {
-  background-color: $per-ink;
-}
-
-.per-actions {
-  gap: 0;
-  min-height: $per-band-height;
-}
-
-.per-action {
-  display: flex;
-  align-items: center;
-  align-self: stretch;
-  gap: 0.45rem;
-  padding: 0 0.85rem;
-  border: 0;
-  background-color: $per-ink;
-  color: white;
-  font-weight: $per-weight-label;
-  text-decoration: none;
-  white-space: nowrap;
-
-  &:hover,
-  &:focus-visible,
-  &.active {
-    background-color: $per-ink-hover;
-    color: white;
-    text-decoration: none;
-  }
-
-  &:focus-visible {
-    outline: 2px solid $per-gradient-start;
-    outline-offset: -3px;
-  }
-}
-
-.per-stats {
-  margin-left: auto;
-}
-
-.per-label {
-  @include media-breakpoint-down(sm) {
-    .per-plain & {
-      display: none;
-    }
-  }
-}
 </style>

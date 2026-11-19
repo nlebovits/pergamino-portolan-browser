@@ -1,7 +1,7 @@
 <template>
   <div :class="{cc: true, [cssStacType]: true, empty: !hasCatalogs && !hasItems}" :key="data.id">
-    <!-- IDE Pergamino: the root catalog gets the topic grid and the source
-         chips in place of the generic description column. -->
+    <!-- IDE Pergamino: the root catalog gets the home view (map, featured
+         layers, category browser) in place of the description and the grid. -->
     <PerHome v-if="isRoot" />
     <section v-if="isCollection" class="hero-map">
       <MapView
@@ -52,11 +52,10 @@
         <LinkList v-if="linkPosition === 'right'" :title="$t('additionalResources')" :links="additionalLinks" />
         <WidgetHook id="view-catalog-meta-end" />
       </b-col>
-      <b-col class="catalogs-container" v-if="hasCatalogs && (!isRoot || selectedSource)">
+      <b-col class="catalogs-container" v-if="hasCatalogs && !isRoot">
         <WidgetHook id="view-catalog-catalogs-start" />
         <Catalogs
-          :apiSearch="hasApiCollections" :catalogs="visibleCatalogs" :hasMore="hasMore"
-          :title="selectedSource ? $t('pergamino.filteredBy', { source: selectedSource }) : null"
+          :apiSearch="hasApiCollections" :catalogs="catalogs" :hasMore="hasMore"
           :collectionsOnly="childrenAreCollections"
           @load-more="loadMoreCollections" @search="searchCollections"
           :loading="Boolean(loadingCollections) || loadingNextCollectionsPage" :loadingMore="loadingCollections === 'more' || loadingNextCollectionsPage"
@@ -95,8 +94,8 @@ import BIconChevronUp from '~icons/bi/chevron-up';
 import Utils from '../utils';
 import { hasText, isObject, size } from 'stac-js/src/utils.js';
 import { addSchemaToDocument, createCatalogSchema } from '../schema-org';
-import { ItemCollection, STAC } from 'stac-js';
-import { childKind, expandChildren, hasProducer } from '../utils/perHome';
+import { ItemCollection } from 'stac-js';
+import { childKind } from '../utils/perHome';
 import DeprecationMixin from '../components/DeprecationMixin.js';
 import { BCollapse } from 'bootstrap-vue-next';
 import { getIgnoredFields } from '../ignored-metadata.js';
@@ -142,28 +141,12 @@ export default defineComponent({
   computed: {
     ...mapState(['data', 'apiCatalogPriority', 'apiItemsLink', 'apiItemsPagination', 'apiItemsNumberMatched', 'nextCollectionsLink', 'stateQueryParameters']),
     ...mapGetters(['catalogs', 'collectionLink', 'getStac', 'isApiChildrenLoading', 'isCollection', 'isRoot', 'items', 'getApiItemsLoading', 'parentLink', 'rootLink']),
-    // The "Por fuente" chip of PerHome, from the `.fuente` state parameter.
-    selectedSource() {
-      return this.isRoot ? (this.stateQueryParameters.fuente ?? null) : null;
-    },
-    // Without a source filter, the grid shows the children of this catalog.
-    // With one on the root, it shows the collections one level down whose
-    // providers name that producer. Collections that have not loaded yet are
-    // left out, because their providers are not known.
     // Upstream never sets `collectionsOnly`, so the grid heading always says
     // "Catálogos". Name the grid for collections when every child is one.
     childrenAreCollections() {
-      const children = this.visibleCatalogs;
+      const children = this.catalogs;
       return Array.isArray(children) && children.length > 0
         && children.every(child => child?.isCollection || (!child?.isCatalog && childKind(child, this.getStac) === 'collection'));
-    },
-    visibleCatalogs() {
-      if (!this.selectedSource) {
-        return this.catalogs;
-      }
-      return expandChildren(this.catalogs, this.getStac)
-        .filter(({ stac }) => stac instanceof STAC && hasProducer(stac, this.selectedSource))
-        .map(({ link }) => link);
     },
     ignoredMetadataFields() {
       return getIgnoredFields(this.data, 'CatalogLike');

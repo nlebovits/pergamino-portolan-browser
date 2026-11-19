@@ -94,36 +94,51 @@ few conflicts.
 
 | File | Owns |
 | --- | --- |
-| `config.js` | Catalog URL, title, `es` as the only locale, footer links |
+| `config.js` | Catalog URL, title, `es` as the only locale. `footerLinks` is `null`, because `PerFooter` draws the footer. |
+| `home.config.js` | The featured keyword, the QGIS plugin URL, the hero map (imagery, views, layer styles, legends, credits), and the footer content |
+| `widgets.config.js` | Mounts `PerFooter` at the upstream `footer-start` hook |
 | `src/locales/es/custom.json` | "Capa", "Categoría" and "Archivo" in place of the STAC nouns, the 39 keys missing from upstream `es`, and the `pergamino.*` strings |
-| `src/theme/variables.scss` | The `$per-*` palette and Montserrat, each value with its GeoNode source |
-| `src/theme/custom.scss` | Component styles that use those variables |
-| `index.html` | `lang="es"`, favicons, the Montserrat link, meta tags |
-| `public/pergamino/` | The white municipal logo and the favicons from pergamino.ar |
-| `src/components/PerHeader.vue` | The gradient brand bar and the `#404040` action band. It replaces the upstream `.site` row and passes every prop and event through. |
-| `src/components/PerHome.vue` + `src/utils/perHome.js` | The home view: the topic grid with counts and the "Por fuente" chips |
+| `src/theme/variables.scss` | The `$per-*` palette from the approved home design, and Chivo with Chivo Mono |
+| `src/theme/custom.scss` | Page-wide styles that use those variables: headings, cards, buttons, the footer rule |
+| `index.html` | `lang="es"`, favicons, the Chivo link, meta tags |
+| `public/pergamino/` | The white and the dark municipal logo, and the favicons from pergamino.ar |
+| `src/components/PerHeader.vue` | The white header bar: logo, wordmark, the catalog statistics, and the thin gradient rule. It has no navigation, because the site is one page. It replaces the upstream `.site` row. |
+| `src/components/PerHome.vue` + `src/utils/perHome.js` | The home view: hero with search, featured layers, the category browser with the source filter, and the QGIS band |
+| `src/components/PerHeroMap.vue` | The 3D map of the hero. It draws the PMTiles link of each collection that `home.config.js` names. |
+| `src/components/PerLayerTile.vue` | One layer tile, for the featured row and the category grid |
+| `src/components/PerFooter.vue` | The demo notice, the Municipalidad contact, and the link columns |
 | `tests/unit/perHome.spec.js` | Unit tests for the home accessors |
 | `basemaps.config.js` | `MAP_CONSTRAINTS`, from the bbox of `limites/partido_pergamino` |
 | `verify-pergamino.mjs` | Browser checks at desktop and mobile size |
 | `.github/workflows/deploy-demo.yml` | Manual deploy only. A push to `main` does not publish. |
 
 Brand values have one home, the `$per-*` variables in `variables.scss`. Do not
-put a hex literal in a component.
+put a hex literal in a component. Map colours are data styles, so they live
+with the layers in `home.config.js`.
 
 These upstream files carry small supporting edits:
 
-- `src/StacBrowser.vue` mounts `PerHeader` in place of the `.site` row.
+- `src/StacBrowser.vue` mounts `PerHeader` in place of the `.site` row, and
+  hides the title row on the root.
 - `src/views/Catalog.vue` mounts `PerHome` on the root, hides the root
-  description column, filters the grid by `?.fuente=`, and names an
-  all-collection grid "Capas".
+  description column and the stock grid there, and names an all-collection
+  grid "Capas".
 - `src/components/maps/MapMixin.js` spreads `MAP_CONSTRAINTS` into the map.
 
 ## Rules for this repository
 
 - Never edit the catalog from here. Report a catalog defect in
   pergamino-ide-catalog.
-- Never key browser behavior to a collection id. The home view reads topics,
-  counts and producers from the catalog at run time.
+- Never key browser behavior to a collection id. The home view reads
+  categories, layers, sources, thumbnails and featured layers from the catalog
+  at run time. The one exception is the hero map: `home.config.js` names the
+  collections it draws. When one of them is missing, its view shows the
+  imagery only.
+- Featured layers carry the keyword in `home.config.js` (`destacado`) in their
+  catalog `keywords`. Tag them in pergamino-ide-catalog.
+- The design is light only, with no theme toggle. The yellow to pink gradient
+  appears only as the thin rule under the header and over the footer. Use
+  text labels, not icon sets.
 - Report a defect that every portolan-browser deployment has upstream. Do not
   patch it here unless a person approves the patch.
 
@@ -136,6 +151,15 @@ SB_catalogUrl=http://localhost:8081/catalog.json \
 pnpm run lint
 pnpm run test:unit
 CATALOG_URL=http://localhost:8081/catalog.json \
+  node verify-pergamino.mjs
+```
+
+To test the featured section before the catalog tags a layer, name collection
+paths in `VERIFY_FEATURE`. The script adds the keyword in its own browser only:
+
+```bash
+CATALOG_URL=http://localhost:8081/catalog.json \
+  VERIFY_FEATURE=demografia/icv,catastro/edificaciones_pb \
   node verify-pergamino.mjs
 ```
 

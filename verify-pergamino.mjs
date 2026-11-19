@@ -4,8 +4,9 @@
 // approved design promises. The inherited tests/e2e suite asserts the upstream
 // multi-catalog product, so it does not apply here.
 //
-// Expected values (topic counts, source chips, collection counts) come from the
-// catalog at run time. When the catalog changes, the expectations follow.
+// Expected values (categories, layer counts, sources, featured layers) come
+// from the catalog at run time, and the home settings from home.config.js.
+// When either changes, the expectations follow.
 //
 // Catalog-dependent checks skip, and do not fail, while the catalog is offline.
 //
@@ -25,10 +26,15 @@
 //     node verify-pergamino.mjs [baseUrl]
 //
 // Screenshots land in ./verify-out (override with VERIFY_OUT).
+//
+// VERIFY_FEATURE=path,path tags those collections (catalog paths without
+// /collection.json) with the featured keyword in flight, in this browser
+// only. Use it to test the featured section before the catalog tags a layer.
 
 /* global process, fetch, URL */
 import { chromium } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
+import homeConfig from './home.config.js';
 
 const BASE = process.argv[2] || 'http://localhost:8080';
 const OUT = process.env.VERIFY_OUT || './verify-out';
@@ -36,23 +42,26 @@ const CATALOG_URL = process.env.CATALOG_URL || 'https://data.source.coop/nlebovi
 
 // The approved tokens (src/theme/variables.scss), as the browser reports them.
 const TOKENS = {
-  ink: 'rgb(64, 64, 64)',          // $per-ink, #404040
-  inkHover: 'rgb(90, 90, 90)',     // $per-ink-hover, #5a5a5a
-  inkSoft: 'rgb(77, 77, 77)',      // $per-ink-soft, #4d4d4d
-  footerInk: 'rgb(0, 0, 0)',       // $per-footer-ink, #000
-  gradientStart: 'rgb(251, 205, 73)', // $per-gradient-start, #fbcd49
-  gradientEnd: 'rgb(240, 127, 175)',  // $per-gradient-end, #f07faf
-  pageBg: 'rgb(255, 255, 255)',
-  font: /^"?Montserrat"?,\s*sans-serif$/,
+  ink: 'rgb(35, 30, 38)',          // $per-ink, #231e26
+  muted: 'rgb(108, 99, 112)',      // $per-muted, #6c6370
+  paper: 'rgb(255, 255, 255)',     // $per-paper, #fff
+  raise: 'rgb(239, 233, 241)',     // $per-raise, #efe9f1
+  pageBg: 'rgb(247, 244, 248)',    // $per-night, #f7f4f8
+  sol: 'rgb(251, 205, 73)',        // $per-sol, #fbcd49
+  rosa: 'rgb(240, 127, 175)',      // $per-rosa, #f07faf
+  font: /^"?Chivo"?,/,
+  mono: /^"?Chivo Mono"?,/,
 };
+const RULE_WIDTH = '3px';          // $per-rule-height
+const PAGE_SIZE = 8;               // src/components/PerHome.vue
+const EMERGENCY = ['911', '100', '103', '107', '144', 'BOMBEROS', 'POLICÍA', 'DEFENSA CIVIL'];
 
 // basemaps.config.js, MAP_CONSTRAINTS.
 const MAP = { minZoom: 8, maxZoom: 19, maxBounds: [[-61.75, -34.82], [-59.33, -32.9]] };
 const BASEMAP_COUNT = 4;
 const TILE_HOSTS = /cartocdn\.com|cholmes\.github\.io|\.pmtiles/;
 
-// src/utils/perHome.js
-const MIN_SOURCE_COLLECTIONS = 5;
+const FEATURE_PATHS = (process.env.VERIFY_FEATURE || '').split(',').map(x => x.trim()).filter(Boolean);
 
 // Representative states. Each entry names the catalog path of a collection.
 // These ids appear only in this script, never in the browser code.
@@ -93,6 +102,18 @@ async function getJson(url) {
   if (!r.ok) throw new Error(`${r.status} ${url}`);
   return r.json();
 }
+// The source of a layer, as src/utils/perHome.js sourceOf() reads it.
+function sourceOf(json) {
+  const providers = Array.isArray(json.providers) ? json.providers : [];
+  const named = providers.filter(p => typeof p?.name === 'string' && p.name.trim());
+  const producer = named.find(p => (p.roles || []).includes('producer'));
+  return (producer || named[0])?.name.trim() || '';
+}
+function isFeatured(json, url) {
+  const word = String(homeConfig.featuredKeyword || '').trim().toLowerCase();
+  const tagged = FEATURE_PATHS.some(f => url.endsWith(`/${f}/collection.json`));
+  return Boolean(word) && (tagged || (json.keywords || []).some(k => String(k).trim().toLowerCase() === word));
+}
 async function readCatalog() {
   const root = await getJson(CATALOG_URL);
   const topics = [];
@@ -103,18 +124,18 @@ async function readCatalog() {
     const children = topic.links.filter(l => l.rel === 'child').map(l => new URL(l.href, url).href);
     topics.push({ title: topic.title || link.title, path: new URL(url).pathname, count: children.length, children });
     for (const child of children) {
-      collections.push(getJson(child).then(json => ({ url: child, json })));
+      collections.push(getJson(child).then(json => ({ url: child, json, topic: topic.title || link.title })));
     }
   }
   const loaded = await Promise.all(collections);
-  const sources = new Map();
+  const counts = new Map();
   for (const { json } of loaded) {
-    const names = new Set((json.providers || []).filter(p => (p.roles || []).includes('producer')).map(p => p.name.trim()));
-    for (const name of names) sources.set(name, (sources.get(name) || 0) + 1);
+    const name = sourceOf(json);
+    if (name) counts.set(name, (counts.get(name) || 0) + 1);
   }
-  const chips = [...sources.entries()].filter(([, n]) => n >= MIN_SOURCE_COLLECTIONS)
-    .sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0], 'es'));
-  return { root, topics, collections: loaded, chips };
+  const sources = [...counts.entries()].sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0], 'es'));
+  const featured = loaded.filter(({ json, url }) => isFeatured(json, url)).slice(0, homeConfig.featuredLimit ?? 3);
+  return { root, topics, collections: loaded, sources, featured };
 }
 
 let catalog = null;
@@ -146,6 +167,17 @@ const MAP_PROBE = `(() => {
 const glArgs = process.env.VERIFY_GL === 'swiftshader' ? [] : ['--use-gl=angle', '--use-angle=gl', '--ignore-gpu-blocklist'];
 const browser = await chromium.launch({ args: glArgs });
 const page = await browser.newPage({ viewport: DESKTOP });
+if (FEATURE_PATHS.length && homeConfig.featuredKeyword) {
+  await page.route(/\/collection\.json$/, async r => {
+    const url = r.request().url();
+    const response = await r.fetch();
+    if (!FEATURE_PATHS.some(f => url.endsWith(`/${f}/collection.json`))) return r.fulfill({ response });
+    const json = await response.json();
+    json.keywords = [...(json.keywords || []), homeConfig.featuredKeyword];
+    return r.fulfill({ response, json });
+  });
+  console.log(`INFO  featured keyword added in flight to: ${FEATURE_PATHS.join(', ')}`);
+}
 
 const consoleErrors = [];
 page.on('console', m => { if (m.type() === 'error') consoleErrors.push(`${page.url()} :: ${m.text()}`); });
@@ -169,18 +201,17 @@ async function shoot(name, vp) {
 await open(route(''));
 const shell = await page.evaluate(() => {
   const cs = e => e && getComputedStyle(e);
-  const bar = document.querySelector('.per-bar');
-  const band = document.querySelector('.per-band');
-  const action = document.querySelector('.per-action');
+  const header = document.querySelector('.per-header');
   const logo = document.querySelector('.per-logo');
   const footer = document.querySelector('#stac-browser > footer');
   const h1 = document.querySelector('h1');
   return {
-    barBg: cs(bar)?.backgroundImage,
-    bandBg: cs(band)?.backgroundColor,
-    actionColor: cs(action)?.color,
-    actionWeight: cs(action)?.fontWeight,
-    actionLabel: action?.innerText.trim(),
+    headerBg: cs(header)?.backgroundColor,
+    headerRule: cs(header)?.borderImageSource,
+    headerRuleWidth: cs(header)?.borderBottomWidth,
+    actions: [...document.querySelectorAll('.per-header .per-action')].map(a => a.innerText.trim()),
+    icons: document.querySelectorAll('.per-header svg').length,
+    brandHref: document.querySelector('.per-brand')?.getAttribute('href'),
     logoSrc: logo?.getAttribute('src'),
     logoLoaded: !!logo && logo.complete && logo.naturalWidth > 0,
     logoAlt: logo?.getAttribute('alt'),
@@ -193,128 +224,204 @@ const shell = await page.evaluate(() => {
     bodyBg: cs(document.body).backgroundColor,
     h1Font: cs(h1)?.fontFamily,
     h1Color: cs(h1)?.color,
-    footerBg: cs(footer)?.backgroundImage,
-    footerLinkColor: cs(footer?.querySelector('a'))?.color,
+    footerRule: cs(footer)?.borderImageSource,
+    footerRuleWidth: cs(footer)?.borderTopWidth,
+    footerText: footer?.innerText || '',
     footerLinks: [...(footer?.querySelectorAll('a') || [])].map(a => ({ text: a.innerText.trim(), href: a.href })),
   };
 });
-check('brand bar uses the GeoNode gradient', shell.barBg?.includes(TOKENS.gradientStart) && shell.barBg?.includes(TOKENS.gradientEnd), shell.barBg);
-check('action band is #404040', shell.bandBg === TOKENS.ink, shell.bandBg);
-check('action labels are white, weight 600', shell.actionColor === 'rgb(255, 255, 255)' && shell.actionWeight === '600', `${shell.actionColor} ${shell.actionWeight}`);
-check('browse action reads "Categorías"', shell.actionLabel === 'Categorías', shell.actionLabel);
-check('municipal logo loads', shell.logoLoaded && /pergamino\/logo-municipalidad-blanco\.svg$/.test(shell.logoSrc || ''), shell.logoSrc);
+check('header is a white bar', shell.headerBg === TOKENS.paper, shell.headerBg);
+check(`header has the ${RULE_WIDTH} brand rule`, shell.headerRuleWidth === RULE_WIDTH && shell.headerRule?.includes(TOKENS.sol) && shell.headerRule?.includes(TOKENS.rosa), `${shell.headerRuleWidth} ${shell.headerRule}`);
+check('header has no navigation, only "Acerca del catálogo"', JSON.stringify(shell.actions) === JSON.stringify(['Acerca del catálogo']), shell.actions.join(' | '));
+check('header has no icons', shell.icons === 0, `${shell.icons} svg`);
+check('logo and wordmark link to the home page', typeof shell.brandHref === 'string', shell.brandHref);
+check('dark municipal logo loads', shell.logoLoaded && /pergamino\/logo-municipalidad-tinta\.svg$/.test(shell.logoSrc || ''), shell.logoSrc);
 check('logo has alt text', shell.logoAlt === 'Municipalidad de Pergamino', shell.logoAlt);
 check('wordmark reads the catalog title', shell.wordmark === 'IDE Pergamino', shell.wordmark);
 check('document title follows the page', /IDE Pergamino/.test(shell.docTitle), shell.docTitle);
 check('html lang is es', shell.lang === 'es', shell.lang);
 check('favicon is the municipal icon', /pergamino\/favicon-32\.png$/.test(shell.favicon || ''), shell.favicon);
-check('body font is Montserrat', TOKENS.font.test(shell.bodyFont || ''), shell.bodyFont);
-check('heading font is Montserrat', TOKENS.font.test(shell.h1Font || ''), shell.h1Font);
-check('body text is #404040', shell.bodyColor === TOKENS.ink, shell.bodyColor);
-check('page background is white', shell.bodyBg === TOKENS.pageBg, shell.bodyBg);
-check('h1 is #404040', shell.h1Color === TOKENS.ink, shell.h1Color);
-check('footer uses the GeoNode gradient', shell.footerBg?.includes(TOKENS.gradientStart), shell.footerBg);
-check('footer links are #000', shell.footerLinkColor === TOKENS.footerInk, shell.footerLinkColor);
+check('body font is Chivo', TOKENS.font.test(shell.bodyFont || ''), shell.bodyFont);
+check('heading font is Chivo', TOKENS.font.test(shell.h1Font || ''), shell.h1Font);
+check('Chivo and Chivo Mono load', await page.evaluate(() => document.fonts.check('16px Chivo') && document.fonts.check('16px "Chivo Mono"')));
+check('body text is #231e26', shell.bodyColor === TOKENS.ink, shell.bodyColor);
+check('page background is #f7f4f8', shell.bodyBg === TOKENS.pageBg, shell.bodyBg);
+check('h1 is #231e26', shell.h1Color === TOKENS.ink, shell.h1Color);
+check(`footer has the ${RULE_WIDTH} brand rule`, shell.footerRuleWidth === RULE_WIDTH && shell.footerRule?.includes(TOKENS.sol), `${shell.footerRuleWidth} ${shell.footerRule}`);
+check('footer says the site is a demo', /Sitio de demostración/.test(shell.footerText) && /no es un sitio oficial/.test(shell.footerText));
+check('footer shows the Municipalidad contact', shell.footerText.includes(homeConfig.footer.contact.email) && shell.footerText.includes(homeConfig.footer.contact.address));
+const emergency = EMERGENCY.filter(n => new RegExp(`(^|\\D)${n}(\\D|$)`).test(shell.footerText) || shell.footerLinks.some(l => l.href === `tel:${n}`));
+check('footer lists no emergency numbers', emergency.length === 0, emergency.join(', ') || 'none');
 const fl = shell.footerLinks;
 const labels = fl.map(l => l.text).join(' | ');
 check('footer links to the data', fl.some(l => l.href.includes('source.coop')), labels);
-check('footer links to the publisher', fl.some(l => l.href.includes('geonode.pergamino.gob.ar')) && fl.some(l => l.href.includes('pergamino.ar/servicios/ide-pergamino')), labels);
+check('footer links to the official GeoNode viewer', fl.some(l => l.href.includes('geonode.pergamino.gob.ar')), labels);
+check('footer links to pergamino.ar', fl.some(l => /^https:\/\/pergamino\.ar\/?$/.test(l.href)), labels);
 check('footer links to the license', fl.some(l => l.href.includes('creativecommons.org/licenses/by-sa/4.0')), labels);
 check('footer links to the source code', fl.some(l => l.href.includes('github.com')), labels);
 
-// Hover state of the action band.
-await page.hover('.per-action');
+// Hover and keyboard focus of the header action.
+await page.hover('.per-header .per-action');
 await page.waitForTimeout(300);
-const hoverBg = await page.evaluate(() => getComputedStyle(document.querySelector('.per-action')).backgroundColor);
-check('action band hover is #5a5a5a', hoverBg === TOKENS.inkHover, hoverBg);
+const action = await page.evaluate(() => { const s = getComputedStyle(document.querySelector('.per-header .per-action')); return { bg: s.backgroundColor, color: s.color }; });
+check('header action hover is #efe9f1', action.bg === TOKENS.raise, action.bg);
 await page.mouse.move(0, 600);
-
-// Keyboard focus is visible.
-await page.focus('.per-action');
-await page.keyboard.press('Shift+Tab');
+await page.focus('.per-brand');
 await page.keyboard.press('Tab');
 const focus = await page.evaluate(() => { const a = document.activeElement; return a && getComputedStyle(a).outlineStyle + ' ' + getComputedStyle(a).outlineColor; });
-check('action band focus ring is visible', /solid/.test(focus || ''), focus);
+check('header focus ring is visible', /solid/.test(focus || ''), focus);
+await page.click('#popover-root-btn');
+await page.waitForTimeout(800);
+check('"Acerca del catálogo" opens the catalog statistics', await page.locator('#popover-root').isVisible().catch(() => false));
+await page.keyboard.press('Escape');
+await page.mouse.click(5, 300);
 
-// ---------- 2. Home: topic grid ----------
+// ---------- 2. Home: hero map ----------
+const hero = homeConfig.hero;
+const heroInfo = await page.evaluate(() => ({
+  h1: document.querySelector('.per-hero h1')?.innerText.trim(),
+  views: [...document.querySelectorAll('.per-hero-views button')].map(b => b.innerText.trim()),
+  pressed: document.querySelector('.per-hero-views button[aria-pressed="true"]')?.innerText.trim(),
+  legend: document.querySelector('.per-hero-legend strong')?.innerText.trim(),
+  credit: document.querySelector('.per-hero-credit')?.innerText.trim(),
+  pageRow: !!document.querySelector('#stac-browser > header .page'),
+  heroTop: document.querySelector('.per-hero')?.getBoundingClientRect().top,
+  headerBottom: document.querySelector('#stac-browser > header')?.getBoundingClientRect().bottom,
+}));
+check('hero headline', heroInfo.h1 === 'Pergamino, en datos abiertos', heroInfo.h1);
+check('hero meets the header', Math.abs(heroInfo.heroTop - heroInfo.headerBottom) < 1, `${heroInfo.heroTop} vs ${heroInfo.headerBottom}`);
+check('root has no title row', !heroInfo.pageRow);
+if (hero) {
+  check('view buttons follow home.config.js', JSON.stringify(heroInfo.views) === JSON.stringify(hero.views.map(v => v.label)), heroInfo.views.join(' | '));
+  check('the first view opens', heroInfo.pressed === hero.views[0].label, heroInfo.pressed);
+  check('legend of the first view shows', heroInfo.legend === hero.views[0].legend?.title, heroInfo.legend);
+  check('imagery credits show', hero.imagery.every(i => !i.attribution || heroInfo.credit?.includes(i.attribution)), heroInfo.credit);
+  // The view layers come from the PMTiles links of the catalog collections.
+  await page.waitForFunction(`(() => { const m = ${MAP_PROBE}; return m && m.getStyle().layers.some(l => l.source && l.source.startsWith('pmtiles-')); })()`, null, { timeout: 45000 }).catch(() => {});
+  await page.waitForFunction(`(() => { const m = ${MAP_PROBE}; return m && m.areTilesLoaded(); })()`, null, { timeout: 45000 }).catch(() => {});
+  await page.waitForTimeout(2500);
+  const heroMap = await page.evaluate(`(() => {
+    const m = ${MAP_PROBE};
+    if (!m) return null;
+    const layers = m.getStyle().layers.filter(l => l.source && l.source.startsWith('pmtiles-'));
+    const visible = layers.filter(l => (l.layout || {}).visibility !== 'none').map(l => l.id);
+    return { layers: layers.length, visible, rendered: visible.length ? m.queryRenderedFeatures({ layers: visible }).length : 0, pitch: m.getPitch() };
+  })()`);
+  const expectLayers = hero.views.reduce((n, v) => n + (v.layers || []).length, 0);
+  check(`hero map adds ${expectLayers} catalog layers`, heroMap?.layers === expectLayers, `${heroMap?.layers} layers`);
+  check('first view draws features', (heroMap?.rendered || 0) > 0, `${heroMap?.rendered} features, pitch ${heroMap?.pitch?.toFixed(0)}`);
+  await page.locator('.per-hero-views button', { hasText: hero.views[1].label }).click();
+  await page.waitForTimeout(2500);
+  const second = await page.evaluate(`(() => { const m = ${MAP_PROBE}; return m.getStyle().layers.filter(l => l.source && l.source.startsWith('pmtiles-') && (l.layout || {}).visibility !== 'none').map(l => l.id); })()`);
+  check(`"${hero.views[1].label}" shows only its own layers`, second.length === hero.views[1].layers.length && second.every(id => id.startsWith(hero.views[1].id)), second.join(', '));
+}
+await shoot('01-home', 'desktop');
+
 if (catalog) {
-  await page.waitForFunction(n => document.querySelectorAll('.per-topic:not(.loading)').length >= n, catalog.topics.length, { timeout: 30000 }).catch(() => {});
-  const home = await page.evaluate(() => ({
-    titles: [...document.querySelectorAll('.per-topic-title')].map(e => e.innerText.trim()),
-    links: [...document.querySelectorAll('.per-topic')].map(e => [...e.querySelectorAll('a')].map(a => a.innerText.trim())),
-    arrows: document.querySelectorAll('.per-topic-more svg.per-topic-arrow').length,
-    titleLinks: document.querySelectorAll('.per-topic-title a').length,
-    bullets: document.querySelectorAll('.per-topic ul').length,
-    summary: document.querySelector('.per-summary')?.innerText.trim(),
-    lead: document.querySelector('.per-lead')?.innerText.trim(),
-    firstTop: document.querySelector('.per-topic')?.getBoundingClientRect().top,
-    metaColumn: !!document.querySelector('.cc .meta'),
-    stockGrid: !!document.querySelector('.catalogs-container'),
-  }));
-  const expectTitles = catalog.topics.map(t => t.title);
-  check(`home shows ${expectTitles.length} topics in catalog order`, JSON.stringify(home.titles) === JSON.stringify(expectTitles), home.titles.join(', '));
-  const expectLinks = catalog.topics.map(t => [t.count === 1 ? 'Ver la capa' : `Ver las ${t.count} capas`]);
-  check('each card has one link that names the real count', JSON.stringify(home.links) === JSON.stringify(expectLinks), home.links.map(l => l.join(' + ')).join(', '));
-  check('each card link carries an arrow', home.arrows === catalog.topics.length, `${home.arrows} arrows`);
-  check('topic titles are not links', home.titleLinks === 0, `${home.titleLinks} linked titles`);
-  check('topic cards have no bullet list', home.bullets === 0, `${home.bullets} lists`);
-  const total = catalog.collections.length;
-  check('summary line counts every collection', home.summary === `${total} capas en ${catalog.topics.length} categorías`, home.summary);
-  check('lead sentence comes from the catalog description', !!home.lead && catalog.root.description.startsWith(home.lead.replace(/…$/, '')), home.lead);
-  check('first topic card is above the fold', home.firstTop < DESKTOP.height, `${Math.round(home.firstTop)}px`);
-  check('root description column is hidden', !home.metaColumn);
-  check('stock grid is hidden without a filter', !home.stockGrid);
-  await shoot('01-home', 'desktop');
+  // ---------- 3. Home: counts, featured layers, category browser ----------
+  await page.waitForSelector('.per-readout', { timeout: 90000 }).catch(() => {});
+  const readout = await page.evaluate(() => [...document.querySelectorAll('.per-readout strong')].map(e => Number(e.innerText)));
+  const expectReadout = [catalog.collections.length, catalog.topics.length, catalog.sources.length];
+  check('readout counts layers, categories and sources', JSON.stringify(readout) === JSON.stringify(expectReadout), `${readout.join(' / ')} (catalog ${expectReadout.join(' / ')})`);
+  check('readout numbers use Chivo Mono', TOKENS.mono.test(await page.evaluate(() => getComputedStyle(document.querySelector('.per-readout strong')).fontFamily)));
 
-  // Two clicks from home to a collection: the card link, then a collection card.
-  await page.click('.per-topic-more');
-  await page.waitForSelector('.catalog-card a', { timeout: 30000 }).catch(() => {});
-  check('a card link opens its topic', page.url().endsWith(`#/${catalog.topics[0].path.slice(catalogBase.length)}`), page.url());
-  await page.locator('.catalog-card a').first().click();
+  const featured = await page.evaluate(() => ({
+    titles: [...document.querySelectorAll('.per-featured .per-tile-title')].map(e => e.innerText.trim()),
+    categories: [...document.querySelectorAll('.per-featured .per-tile-category')].map(e => e.innerText.trim()),
+    links: [...document.querySelectorAll('.per-featured a.per-tile')].map(a => a.getAttribute('href')),
+  }));
+  if (catalog.featured.length) {
+    check(`featured shows the ${catalog.featured.length} tagged layers in catalog order`, JSON.stringify(featured.titles) === JSON.stringify(catalog.featured.map(f => f.json.title)), featured.titles.join(' | '));
+    check('featured tiles name their category', JSON.stringify(featured.categories) === JSON.stringify(catalog.featured.map(f => f.topic)), featured.categories.join(' | '));
+    check('featured tiles link to their layer', featured.links.every((href, i) => href?.endsWith(catalog.featured[i].url.slice(new URL(CATALOG_URL).origin.length + catalogBase.length))), featured.links.join(' | '));
+  }
+  else {
+    check('featured section is hidden when no layer is tagged', featured.titles.length === 0, `${featured.titles.length} tiles`);
+  }
+
+  const chips = await page.evaluate(() => [...document.querySelectorAll('.per-chips button')].map(b => b.innerText.replace(/\s+/g, ' ').trim()));
+  const expectChips = catalog.topics.map(t => `${t.title} ${t.count}`);
+  check(`category chips list ${expectChips.length} categories in catalog order with counts`, JSON.stringify(chips) === JSON.stringify(expectChips), chips.join(' | '));
+  const first = catalog.topics[0];
+  const grid = async () => page.evaluate(() => ({
+    tiles: document.querySelectorAll('.per-grid .per-tile').length,
+    more: document.querySelector('.per-more button')?.innerText.trim(),
+    summary: document.querySelector('#per-browser-heading + p')?.innerText.trim(),
+  }));
+  let g = await grid();
+  check(`first category shows ${Math.min(PAGE_SIZE, first.count)} tiles`, g.tiles === Math.min(PAGE_SIZE, first.count), `${g.tiles} tiles; ${g.summary}`);
+  if (first.count > PAGE_SIZE) {
+    check('"Ver las N capas" names the count', g.more === `Ver las ${first.count} capas de ${first.title}`, g.more);
+    await page.click('.per-more button');
+    await page.waitForTimeout(500);
+    g = await grid();
+    check(`the button shows all ${first.count} layers`, g.tiles === first.count, `${g.tiles} tiles`);
+  }
+  const other = catalog.topics[catalog.topics.length - 1];
+  await page.locator('.per-chips button', { hasText: other.title }).click();
+  await page.waitForTimeout(500);
+  g = await grid();
+  check(`a chip switches to "${other.title}"`, g.tiles === Math.min(PAGE_SIZE, other.count) && g.summary?.includes(other.title), `${g.tiles} tiles; ${g.summary}`);
+
+  // Source filter.
+  const options = await page.evaluate(() => [...document.querySelectorAll('#per-source-select option')].map(o => o.innerText.trim()));
+  const expectOptions = ['Todas las fuentes', ...catalog.sources.map(([n, c]) => `${n} (${c})`)];
+  check('source filter lists every source with its count', JSON.stringify(options) === JSON.stringify(expectOptions), `${options.length} options`);
+  const arba = catalog.sources.find(([n]) => /ARBA/.test(n)) || catalog.sources[catalog.sources.length - 1];
+  await page.selectOption('#per-source-select', arba[0]);
+  await page.waitForTimeout(800);
+  const filtered = await page.evaluate(() => ({
+    chips: [...document.querySelectorAll('.per-chips button')].map(b => ({ text: b.innerText.replace(/\s+/g, ' ').trim(), disabled: b.disabled })),
+    sources: [...document.querySelectorAll('.per-grid .per-tile-source')].map(e => e.innerText.trim()),
+    summary: document.querySelector('#per-browser-heading + p')?.innerText.trim(),
+  }));
+  const arbaTotal = filtered.chips.reduce((n, c) => n + Number(c.text.split(' ').pop()), 0);
+  check(`chip counts add up to the ${arba[1]} layers of the source`, arbaTotal === arba[1], `${arbaTotal}`);
+  check('chips without a layer of the source are disabled', filtered.chips.every(c => c.disabled === c.text.endsWith(' 0')));
+  check('every tile shows the chosen source', filtered.sources.length > 0 && filtered.sources.every(x => x === arba[0]), `${filtered.sources.length} tiles`);
+  check('the summary names the source', filtered.summary?.includes(arba[0]), filtered.summary);
+  await shoot('02-home-filtered', 'desktop');
+  await page.selectOption('#per-source-select', { index: 0 });
+
+  // Search, from the "/" key.
+  await page.mouse.click(5, 5);
+  await page.keyboard.press('/');
+  check('"/" moves the focus to the search field', await page.evaluate(() => document.activeElement?.id === 'per-search-input'));
+  const term = 'parcela';
+  await page.keyboard.type(term);
+  await page.waitForTimeout(600);
+  const search = await page.evaluate(() => ({
+    heading: document.querySelector('#per-browser-heading')?.innerText.trim(),
+    chips: document.querySelectorAll('.per-chips button').length,
+    titles: [...document.querySelectorAll('.per-grid .per-tile-title')].map(e => e.innerText.trim()),
+  }));
+  const fold = t => String(t || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+  const expectMatches = catalog.collections.filter(({ json, topic }) => fold([json.title, json.description, sourceOf(json), topic, ...(json.keywords || [])].join(' ')).includes(term));
+  check('search shows a results heading and hides the chips', search.heading === 'Resultados de la búsqueda' && search.chips === 0, search.heading);
+  check(`search for "${term}" finds ${expectMatches.length} layers`, search.titles.length === Math.min(PAGE_SIZE, expectMatches.length), `${search.titles.length} tiles`);
+  await page.fill('#per-search-input', '');
+
+  // Two clicks from home to a collection: a chip, then a tile.
+  await page.locator('.per-chips button').first().click();
+  await page.locator('.per-grid a.per-tile').first().click();
   await page.waitForSelector('.maplibregl-map', { timeout: 30000 }).catch(() => {});
   // Let the map finish before the next navigation. Upstream MapView throws
   // "reading 'isEmpty'" when a page is left while its assets still load.
   await page.waitForFunction(`(() => { const m = ${MAP_PROBE}; return !m || (m.isStyleLoaded() && m.areTilesLoaded()); })()`, null, { timeout: 45000 }).catch(() => {});
   await page.waitForTimeout(3000);
-  check('a collection card in the topic opens a collection', /collection\.json$/.test(page.url()), page.url());
+  check('a tile opens its layer', /collection\.json$/.test(page.url()), page.url());
 
-  // ---------- 3. Home: source chips and the filtered state ----------
-  await open(route(''), 1000);
-  await page.waitForSelector('.per-chip', { timeout: 90000 }).catch(() => {});
-  const chips = await page.evaluate(() => [...document.querySelectorAll('.per-chip:not(.per-chip-clear)')].map(b => b.innerText.replace(/\s+/g, ' ').trim()));
-  const expectChips = catalog.chips.map(([name, n]) => `${name} ${n}`);
-  check(`source chips list producers with ${MIN_SOURCE_COLLECTIONS}+ collections`, JSON.stringify(chips) === JSON.stringify(expectChips), chips.join(' | '));
-  const target = catalog.chips.find(([name]) => /ARBA/.test(name)) || catalog.chips[catalog.chips.length - 1];
-  if (target) {
-    await page.locator('.per-chip', { hasText: target[0] }).click();
-    await page.waitForTimeout(1500);
-    const filtered = await page.evaluate(() => ({
-      url: location.href,
-      heading: document.querySelector('.catalogs > header h2')?.innerText.trim(),
-      cards: document.querySelectorAll('.catalogs .catalog-card').length,
-      topics: document.querySelectorAll('.per-topic').length,
-      pressed: document.querySelector('.per-chip[aria-pressed="true"]')?.innerText.trim(),
-    }));
-    check('a chip puts the filter in the URL', filtered.url.includes('.fuente='), filtered.url);
-    check('filtered grid names the source', filtered.heading === `Capas de ${target[0]}`, filtered.heading);
-    check(`filtered grid lists ${target[1]} collections`, filtered.cards === target[1], `${filtered.cards} cards`);
-    check('topic grid hides while filtered', filtered.topics === 0, `${filtered.topics} topic cards`);
-    check('pressed chip is marked', !!filtered.pressed, filtered.pressed);
-    const pressedStyle = await page.evaluate(() => { const b = document.querySelector('.per-chip[aria-pressed="true"]'); const s = b && getComputedStyle(b); return s && `${s.backgroundColor} ${s.color}`; });
-    check('pressed chip is legible (white on #404040)', pressedStyle === `${TOKENS.ink} rgb(255, 255, 255)`, pressedStyle);
-    await shoot('02-home-filtered', 'desktop');
-    // A direct link reloads into the same filtered state.
-    await page.reload({ waitUntil: 'networkidle' });
-    await page.waitForFunction(n => document.querySelectorAll('.catalogs .catalog-card').length >= n, target[1], { timeout: 90000 }).catch(() => {});
-    const reloaded = await page.locator('.catalogs .catalog-card').count();
-    check('filtered URL reloads to the same list', reloaded === target[1], `${reloaded} cards`);
-    await page.locator('.per-chip-clear').click();
-    await page.waitForTimeout(800);
-    check('clearing the filter restores the topics', await page.locator('.per-topic').count() === catalog.topics.length);
-  }
-  else {
-    skip('source filter', 'no producer reaches the minimum');
-  }
+  // QGIS band and the stock layout.
+  await open(route(''), 1500);
+  const qgis = await page.evaluate(() => ({
+    href: document.querySelector('.per-qgis a')?.href,
+    steps: document.querySelectorAll('.per-qgis li').length,
+    meta: !!document.querySelector('.cc .meta'),
+    stock: !!document.querySelector('.catalogs-container'),
+  }));
+  check('QGIS band links the plugin', qgis.href === homeConfig.qgisPluginUrl && qgis.steps === 3, qgis.href);
+  check('root description column is hidden', !qgis.meta);
+  check('stock catalog grid is hidden on the root', !qgis.stock);
 
   // ---------- 4. Topic page (Catastro) ----------
   const catastro = catalog.topics.find(t => t.title === 'Catastro') || catalog.topics[0];
@@ -415,14 +522,7 @@ if (catalog) {
   if (radios) check(`basemap switcher offers ${BASEMAP_COUNT}`, radios === BASEMAP_COUNT, `${radios} options`);
   else skip('basemap switcher', 'no radio inputs found');
 
-  // ---------- 7. Sidebar and deep link ----------
-  await open(route(''), 2000);
-  await page.click('.per-action');
-  await page.waitForSelector('#sidebar.show, #sidebar', { state: 'visible', timeout: 15000 }).catch(() => {});
-  await page.waitForTimeout(2000);
-  const sidebar = await page.evaluate(() => document.querySelector('#sidebar')?.innerText.slice(0, 200));
-  check('"Categorías" opens the sidebar tree', !!sidebar && /Catastro/.test(sidebar), sidebar?.replace(/\s+/g, ' '));
-  await page.keyboard.press('Escape');
+  // ---------- 7. Deep link ----------
   await open(route(COLLECTIONS[5].path), 3000);
   const before = await page.textContent('h1');
   await page.reload({ waitUntil: 'networkidle' });
@@ -433,15 +533,14 @@ if (catalog) {
 
 // ---------- 8. Mobile ----------
 await page.setViewportSize(MOBILE);
-const mobilePages = [['01-home', ''], ['02-home-filtered', catalog?.chips[0] ? `?.fuente=${encodeURIComponent((catalog.chips.find(([n]) => /ARBA/.test(n)) || catalog.chips[0])[0])}` : null]];
+const mobilePages = [['01-home', '']];
 if (catalog) {
   const catastro = catalog.topics.find(t => t.title === 'Catastro') || catalog.topics[0];
   mobilePages.push(['03-topic-catastro', catastro.path.slice(catalogBase.length)]);
   for (const c of COLLECTIONS) mobilePages.push([`04-${c.key}`, c.path]);
 }
 for (const [name, path] of mobilePages) {
-  if (path === null) continue;
-  await open(route(path), name.startsWith('02') ? 15000 : 4000);
+  await open(route(path), name === '01-home' ? 8000 : 4000);
   const m = await page.evaluate(() => ({
     header: document.querySelector('.per-header')?.getBoundingClientRect().height,
     logo: document.querySelector('.per-logo')?.getBoundingClientRect().width,
@@ -449,8 +548,20 @@ for (const [name, path] of mobilePages) {
   await noOverflow(`${name} mobile`);
   if (name === '01-home') {
     check('header renders on mobile', m.header > 0 && m.logo > 0, `${Math.round(m.header)}px high`);
-    const cols = await page.evaluate(() => getComputedStyle(document.querySelector('.per-topics') || document.body).gridTemplateColumns.split(' ').length);
-    check('topic grid is one column on mobile', cols === 1, `${cols} columns`);
+    const layout = await page.evaluate(() => {
+      const cols = sel => { const e = document.querySelector(sel); return e ? getComputedStyle(e).gridTemplateColumns.split(' ').length : null; };
+      const copy = document.querySelector('.per-hero-copy')?.getBoundingClientRect();
+      const map = document.querySelector('.per-hero-canvas')?.getBoundingClientRect();
+      const views = document.querySelector('.per-hero-views')?.getBoundingClientRect();
+      const credit = document.querySelector('.per-hero-credit')?.getBoundingClientRect();
+      return { grid: cols('.per-grid'), featured: cols('.per-featured'), copyBottom: copy?.bottom, mapTop: map?.top, mapBottom: map?.bottom, viewsBottom: views?.bottom, creditTop: credit?.top };
+    });
+    check('layer grid is two columns on mobile', layout.grid === 2, `${layout.grid} columns`);
+    if (layout.featured !== null) check('featured tiles stack on mobile', layout.featured === 1, `${layout.featured} columns`);
+    if (homeConfig.hero) {
+      check('the map sits under the hero text on mobile', layout.mapTop >= layout.copyBottom - 1, `${Math.round(layout.mapTop)} vs ${Math.round(layout.copyBottom)}`);
+      check('map credits sit under the map, clear of the view buttons', layout.creditTop >= layout.mapBottom - 1 && layout.viewsBottom < layout.mapBottom, `${Math.round(layout.creditTop)} vs ${Math.round(layout.mapBottom)}`);
+    }
   }
   await shoot(name, 'mobile');
 }

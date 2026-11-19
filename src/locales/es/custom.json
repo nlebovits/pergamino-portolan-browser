@@ -100,20 +100,52 @@
     "featured": "Destacado"
   },
   "pergamino": {
-    "subtitle": "Infraestructura de Datos Espaciales · Municipalidad de Pergamino",
     "logoAlt": "Municipalidad de Pergamino",
-    "browse": "Categorías",
-    "search": "Buscar",
-    "summary": "{layers} en {categories}",
-    "layerCount": "{count} capa | {count} capas",
-    "categoryCount": "{count} categoría | {count} categorías",
-    "topicsHeading": "Categorías",
-    "seeAll": "Ver la capa | Ver las {count} capas",
-    "seeCategory": "Ver la categoría",
-    "bySource": "Por fuente",
-    "bySourceLoading": "Cargando las fuentes…",
-    "filteredBy": "Capas de {source}",
-    "clearFilter": "Quitar filtro",
-    "noLayersForSource": "Ninguna capa cargada coincide con esta fuente."
+    "about": "Acerca del catálogo",
+    "hero": {
+      "views": "Vista del mapa"
+    },
+    "home": {
+      "heroLabel": "Mapa de la ciudad",
+      "title": "Pergamino, en datos abiertos",
+      "lead": "{layers} del partido, listas para ver en el navegador, abrir en QGIS o descargar.",
+      "leadLoading": "Capas del partido, listas para ver en el navegador, abrir en QGIS o descargar.",
+      "searchLabel": "Buscar capas",
+      "searchPlaceholder": "Buscar capas u organismos",
+      "layerCount": "{count} capa | {count} capas",
+      "layers": "capa | capas",
+      "categories": "categoría | categorías",
+      "sources": "organismo | organismos",
+      "featured": "Destacadas",
+      "openLayer": "Ver capa",
+      "browse": "Explorá por categoría",
+      "results": "Resultados de la búsqueda",
+      "categorySummary": "{layers} en {category}",
+      "categorySourceSummary": "{layers} de {source} en {category}",
+      "resultsSummary": "{layers} para «{query}»",
+      "categoriesLabel": "Categorías",
+      "otherLayers": "Otras capas",
+      "subcategory": "Subcategoría",
+      "source": "Fuente",
+      "allSources": "Todas las fuentes",
+      "noMatches": "Ninguna capa coincide con la búsqueda.",
+      "showAll": "Ver las {count} capas de {category}",
+      "showAllResults": "Ver los {count} resultados",
+      "qgis": {
+        "title": "Abrí estas capas en QGIS",
+        "text": "El complemento Portolan Registry lista los catálogos registrados, incluido este. Agrega cada capa al mapa con su propio estilo y descarga solo el área que necesitás.",
+        "button": "Ver el complemento",
+        "requirements": "Requiere QGIS 3.34 o posterior. Para GeoParquet, DuckDB 1.5.0 o posterior.",
+        "menu": "Complementos › Administrar e instalar complementos",
+        "step1": "En QGIS, abrí {menu}.",
+        "step2": "Buscá {plugin} e instalalo.",
+        "step3": "Abrí el panel del complemento y elegí {catalog} en la lista de catálogos."
+      }
+    },
+    "footer": {
+      "demo": "Sitio de demostración.",
+      "notOfficial": "Este navegador no es un sitio oficial de la Municipalidad de Pergamino. Para trámites e información oficial, visitá pergamino.ar.",
+      "contact": "Contacto de la Municipalidad"
+    }
   }
 }

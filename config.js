@@ -44,11 +44,6 @@ export default {
   transactionsRequireLogin: true,
   transactionsRequirePreflight: true,
   crs: {},
-  footerLinks: [
-    { label: "Datos en Source Cooperative", url: "https://source.coop/nlebovits/pergamino-ide" },
-    { label: "Repositorio del catálogo", url: "https://github.com/nlebovits/pergamino-ide-catalog" },
-    { label: "Portal GeoNode", url: "https://geonode.pergamino.gob.ar/" },
-    { label: "IDE Pergamino en pergamino.ar", url: "https://pergamino.ar/servicios/ide-pergamino/" },
-    { label: "Licencia CC BY-SA 4.0", url: "https://creativecommons.org/licenses/by-sa/4.0/deed.es" }
-  ]
+  // PerFooter draws the footer links from home.config.js.
+  footerLinks: null
 };
