@@ -13,12 +13,21 @@ export default {
   featuredLimit: 3,
 
   // The QGIS plugin that reads the Portolan registry.
+  // The official site of the Municipalidad. The demo notice in the header
+  // links it.
+  officialSiteUrl: 'https://pergamino.ar/',
+
+  // The source code of this browser. The header links it with the GitHub mark.
+  sourceUrl: 'https://github.com/nlebovits/pergamino-portolan-browser',
+
   qgisPluginUrl: 'https://plugins.qgis.org/plugins/portolan_registry_qgis/',
 
   // The footer (src/components/PerFooter.vue), on every page. The contact
   // details and links of the Municipalidad come from the footer of
   // https://pergamino.ar/ in November 2026, without the emergency numbers.
   // The footer states that this site is a demo and not an official site.
+  // A link with an `icon` (facebook, instagram, x, youtube, tiktok) shows the
+  // brand mark of the network, with the label as its accessible name.
   footer: {
     contact: {
       address: 'Florida 629, Pergamino, Buenos Aires, Argentina',
@@ -51,11 +60,11 @@ export default {
       {
         title: 'Redes',
         links: [
-          { label: 'Facebook', url: 'https://www.facebook.com/munipergamino' },
-          { label: 'Instagram', url: 'https://www.instagram.com/munipergamino/' },
-          { label: 'X', url: 'https://x.com/MuniPergamino' },
-          { label: 'YouTube', url: 'https://www.youtube.com/@MUNICIPALIDADPERGAMINO' },
-          { label: 'TikTok', url: 'https://www.tiktok.com/@munipergamino' }
+          { label: 'Facebook', icon: 'facebook', url: 'https://www.facebook.com/munipergamino' },
+          { label: 'Instagram', icon: 'instagram', url: 'https://www.instagram.com/munipergamino/' },
+          { label: 'X', icon: 'x', url: 'https://x.com/MuniPergamino' },
+          { label: 'YouTube', icon: 'youtube', url: 'https://www.youtube.com/@MUNICIPALIDADPERGAMINO' },
+          { label: 'TikTok', icon: 'tiktok', url: 'https://www.tiktok.com/@munipergamino' }
         ]
       }
     ]

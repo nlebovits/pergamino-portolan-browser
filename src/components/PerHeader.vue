@@ -13,6 +13,13 @@
         >
           {{ $t('pergamino.about') }}
         </button>
+        <a
+          v-if="sourceUrl" class="per-action per-source-link" :href="sourceUrl"
+          target="_blank" rel="noopener noreferrer"
+          :aria-label="$t('pergamino.sourceCode')" :title="$t('pergamino.sourceCode')"
+        >
+          <BIconGithub aria-hidden="true" />
+        </a>
         <button v-if="canAuthenticate" type="button" class="per-action" :title="authTitle" @click="$emit('logInOut')">
           <component :is="authIcon" /> {{ authLabel }}
         </button>
@@ -28,24 +35,36 @@
         </button>
       </div>
     </div>
+    <p class="per-demo">
+      <span class="per-demo-mark" aria-hidden="true">🚧</span>
+      <i18n-t keypath="pergamino.demo.notOfficial" tag="span" scope="global">
+        <template #site>
+          <a :href="officialSite" target="_blank" rel="noopener noreferrer">{{ $t('pergamino.demo.site') }}</a>
+        </template>
+      </i18n-t>
+    </p>
   </div>
 </template>
 
 <script>
 import { defineAsyncComponent } from 'vue';
+import BIconGithub from '~icons/bi/github';
 import BIconMoonStars from '~icons/bi/moon-stars';
 import BIconSun from '~icons/bi/sun';
+import homeConfig from '../../home.config';
 import HeaderTitle from './HeaderTitle.vue';
 import StacLink from './StacLink.vue';
 
 // Replaces the upstream `.site` row of StacBrowser.vue with one white bar:
-// the municipal logo and the wordmark, which link to the home page, and the
-// catalog statistics. The brand gradient is a thin rule under the bar. The
+// the municipal logo and the wordmark, which link to the home page, the
+// catalog statistics, and a GitHub link to the source of this browser. A yellow strip under the bar states that the site is a
+// demo and not an official site. The brand gradient is a thin rule under the bar. The
 // site is one page, so the bar has no navigation: no sidebar and no search.
 // Login, the language chooser and the colour toggle still pass through.
 export default {
   name: 'PerHeader',
   components: {
+    BIconGithub,
     BIconMoonStars,
     BIconSun,
     HeaderTitle,
@@ -104,6 +123,12 @@ export default {
   },
   emits: ['logInOut', 'setLocale', 'toggleColorMode'],
   computed: {
+    officialSite() {
+      return homeConfig.officialSiteUrl;
+    },
+    sourceUrl() {
+      return homeConfig.sourceUrl || null;
+    },
     logo() {
       return `${import.meta.env.BASE_URL}pergamino/logo-municipalidad-tinta.svg`;
     }
@@ -139,16 +164,40 @@ export default {
   align-items: center;
   gap: 1.25rem;
   min-height: $per-head-height;
-  margin-inline: auto;
-  padding-inline: $block-gap;
-
-  @include media-breakpoint-up(xxxl) {
-    max-width: 75vw;
-  }
+  padding-inline: $per-gutter;
 
   @include media-breakpoint-down(sm) {
     gap: 0.5rem;
   }
+}
+
+// The demo notice: a full-width yellow strip under the bar, over the brand
+// rule, so that every page opens with it.
+#stac-browser .per-demo {
+  margin: 0;
+  padding: 0.6rem $per-gutter;
+  text-align: center;
+  text-wrap: balance;
+  background-color: $per-sol;
+  color: $per-ink;
+  font-size: 0.88rem;
+  font-weight: 500;
+  line-height: 1.4;
+
+  a {
+    color: $per-ink;
+    font-weight: $per-weight-title;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  @include media-breakpoint-down(sm) {
+    font-size: 0.8rem;
+  }
+}
+
+.per-demo-mark {
+  margin-right: 0.5rem;
 }
 
 #stac-browser .per-brand {
@@ -223,6 +272,10 @@ export default {
     outline: 2px solid $per-rosa;
     outline-offset: 1px;
   }
+}
+
+#stac-browser .per-source-link {
+  font-size: 1.15rem;
 }
 
 .per-lang .btn {

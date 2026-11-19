@@ -59,6 +59,9 @@ $per-weight-display: 800;
 // Chivo Mono sets numbers that a reader compares: counts, legend ends, steps.
 $per-font-mono:      "Chivo Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 $per-head-height:    3.75rem;
+// The layout spans the full window. The gutter is the space between the
+// window edge and the content. It grows from 20px on a phone to 56px.
+$per-gutter:         clamp(20px, 4vw, 56px);
 
 // ─────────────────────────────────────────────────────────
 // GENERAL — color-neutral settings that apply in both modes

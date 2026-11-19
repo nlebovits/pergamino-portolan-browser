@@ -62,35 +62,77 @@
       </div>
       <p v-else-if="complete" class="per-empty">{{ $t('pergamino.home.noMatches') }}</p>
 
-      <div v-if="visible.length > shown.length" class="per-more">
-        <button type="button" class="per-button" @click="expanded = true">{{ moreLabel }}</button>
+      <div v-if="visible.length > pageSize" class="per-more">
+        <button v-if="expanded" type="button" class="per-button" @click="collapse">{{ $t('pergamino.home.showLess') }}</button>
+        <button v-else type="button" class="per-button" @click="expanded = true">{{ moreLabel }}</button>
       </div>
     </section>
 
-    <section v-if="qgisPluginUrl" class="per-qgis" aria-labelledby="per-qgis-heading">
-      <div>
-        <h2 id="per-qgis-heading">{{ $t('pergamino.home.qgis.title') }}</h2>
-        <p>{{ $t('pergamino.home.qgis.text') }}</p>
-        <a class="per-button solid" :href="qgisPluginUrl" target="_blank" rel="noopener noreferrer">{{ $t('pergamino.home.qgis.button') }}</a>
-        <p class="per-qgis-req">{{ $t('pergamino.home.qgis.requirements') }}</p>
+    <section v-if="tools.length > 0" class="per-qgis" aria-labelledby="per-qgis-heading">
+      <div class="per-use-head">
+        <h2 id="per-qgis-heading">{{ $t('pergamino.home.use.title') }}</h2>
+        <div class="per-tabs" role="tablist" :aria-label="$t('pergamino.home.use.tools')" @keydown="tabKey">
+          <button
+            v-for="t in tools" :id="`per-tab-${t}`" :key="t" ref="tabs"
+            type="button" role="tab"
+            :aria-selected="t === activeTool ? 'true' : 'false'" :aria-controls="`per-panel-${t}`"
+            @click="tool = t"
+          >
+            {{ $t(`pergamino.home.use.${t}.tab`) }}
+          </button>
+        </div>
       </div>
-      <ol>
-        <li>
-          <i18n-t keypath="pergamino.home.qgis.step1" tag="span" scope="global">
-            <template #menu><strong>{{ $t('pergamino.home.qgis.menu') }}</strong></template>
-          </i18n-t>
-        </li>
-        <li>
-          <i18n-t keypath="pergamino.home.qgis.step2" tag="span" scope="global">
-            <template #plugin><strong>Portolan Registry</strong></template>
-          </i18n-t>
-        </li>
-        <li>
-          <i18n-t keypath="pergamino.home.qgis.step3" tag="span" scope="global">
-            <template #catalog><strong>{{ catalogTitle }}</strong></template>
-          </i18n-t>
-        </li>
-      </ol>
+
+      <div
+        v-if="activeTool === 'qgis'" id="per-panel-qgis" class="per-use-panel"
+        role="tabpanel" aria-labelledby="per-tab-qgis"
+      >
+        <div>
+          <p>{{ $t('pergamino.home.qgis.text') }}</p>
+          <a class="per-button solid" :href="qgisPluginUrl" target="_blank" rel="noopener noreferrer">{{ $t('pergamino.home.qgis.button') }}</a>
+          <p class="per-qgis-req">{{ $t('pergamino.home.qgis.requirements') }}</p>
+        </div>
+        <ol>
+          <li>
+            <i18n-t keypath="pergamino.home.qgis.step1" tag="span" scope="global">
+              <template #menu><strong>{{ $t('pergamino.home.qgis.menu') }}</strong></template>
+            </i18n-t>
+          </li>
+          <li>
+            <i18n-t keypath="pergamino.home.qgis.step2" tag="span" scope="global">
+              <template #plugin><strong>Portolan Registry</strong></template>
+            </i18n-t>
+          </li>
+          <li>
+            <i18n-t keypath="pergamino.home.qgis.step3" tag="span" scope="global">
+              <template #catalog><strong>{{ catalogTitle }}</strong></template>
+            </i18n-t>
+          </li>
+        </ol>
+      </div>
+
+      <div
+        v-else-if="snippets" :id="`per-panel-${activeTool}`" class="per-use-panel"
+        role="tabpanel" :aria-labelledby="`per-tab-${activeTool}`"
+      >
+        <div>
+          <p>{{ $t(`pergamino.home.use.${activeTool}.text`) }}</p>
+          <p class="per-qgis-req">
+            <i18n-t keypath="pergamino.home.use.example" tag="span" scope="global">
+              <template #layer>
+                <StacLink :data="example.entry.link" :title="example.entry.title" hideIcon />
+              </template>
+            </i18n-t>
+          </p>
+        </div>
+        <div class="per-code">
+          <div class="per-code-bar">
+            <span>{{ $t(`pergamino.home.use.${activeTool}.tab`) }}</span>
+            <button type="button" class="per-copy" @click="copy">{{ copied ? $t('pergamino.home.use.copied') : $t('pergamino.home.use.copy') }}</button>
+          </div>
+          <pre tabindex="0" :aria-label="$t(`pergamino.home.use.${activeTool}.tab`)"><code>{{ snippets[activeTool] }}</code></pre>
+        </div>
+      </div>
     </section>
   </div>
 </template>
@@ -100,21 +142,25 @@ import { defineAsyncComponent, defineComponent } from 'vue';
 import { mapGetters, mapState } from 'vuex';
 import homeConfig from '../../home.config';
 import PerLayerTile from './PerLayerTile.vue';
-import { allEntries, featuredEntries, filterEntries, homeGroups, sourceOptions } from '../utils/perHome';
+import StacLink from './StacLink.vue';
+import {
+  allEntries, featuredEntries, filterEntries, homeGroups, parquetSource, querySnippets, sourceOptions
+} from '../utils/perHome';
 
 // The tiles a category shows before the "Ver las N capas" button.
 const PAGE_SIZE = 8;
 
 // The home view of the root catalog: a map with a search field, the featured
-// layers, a browser over every layer by category and source, and the way
-// into QGIS. Catalog.vue mounts it for the root only. The categories, layers,
+// layers, a browser over every layer by category and source, and a band with
+// one tab each for QGIS, Python and DuckDB. Catalog.vue mounts it for the root only. The categories, layers,
 // sources and featured layers come from the catalog. home.config.js holds
 // the rest.
 export default defineComponent({
   name: 'PerHome',
   components: {
     PerHeroMap: defineAsyncComponent(() => import('./PerHeroMap.vue')),
-    PerLayerTile
+    PerLayerTile,
+    StacLink
   },
   data() {
     return {
@@ -122,6 +168,9 @@ export default defineComponent({
       source: null,
       selected: undefined,
       expanded: false,
+      pageSize: PAGE_SIZE,
+      tool: null,
+      copied: false,
       hero: homeConfig.hero || null,
       qgisPluginUrl: homeConfig.qgisPluginUrl || null
     };
@@ -185,6 +234,29 @@ export default defineComponent({
         ? this.$t('pergamino.home.categorySourceSummary', { layers, source: this.source, category })
         : this.$t('pergamino.home.categorySummary', { layers, category });
     },
+    // The layer of the Python and DuckDB examples: the first layer on view with
+    // a Parquet file, so that the examples follow the chosen category.
+    example() {
+      for (const entry of [...this.shown, ...this.featured, ...this.entries]) {
+        const source = entry.loaded ? parquetSource(entry.stac) : null;
+        if (source) {
+          return { entry, source };
+        }
+      }
+      return null;
+    },
+    snippets() {
+      return this.example ? querySnippets(this.example.source) : null;
+    },
+    tools() {
+      return [
+        ...(this.qgisPluginUrl ? ['qgis'] : []),
+        ...(this.snippets ? ['python', 'duckdb'] : [])
+      ];
+    },
+    activeTool() {
+      return this.tools.includes(this.tool) ? this.tool : this.tools[0];
+    },
     moreLabel() {
       const count = this.visible.length;
       return this.searching
@@ -217,6 +289,9 @@ export default defineComponent({
     },
     visible() {
       this.expanded = false;
+    },
+    activeTool() {
+      this.copied = false;
     }
   },
   mounted() {
@@ -234,6 +309,53 @@ export default defineComponent({
     },
     countIn(group) {
       return filterEntries(group.entries, { source: this.source }).length;
+    },
+    // Shows the first page again, and scrolls back to the heading of the
+    // browser when it is above the view. The header is sticky, so the
+    // heading stops under it.
+    collapse() {
+      this.expanded = false;
+      const browser = this.$refs.browser;
+      if (!browser) {
+        return;
+      }
+      const header = document.querySelector('#stac-browser > header');
+      const offset = (header ? header.getBoundingClientRect().height : 0) + 16;
+      const top = browser.getBoundingClientRect().top;
+      if (top < offset) {
+        window.scrollBy({ top: top - offset, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      }
+    },
+    // Arrow keys, Home and End move between the tabs. Tab also reaches each
+    // tab, so a keyboard user can step through them either way.
+    tabKey(event) {
+      const keys = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+      const count = this.tools.length;
+      let index = this.tools.indexOf(this.activeTool);
+      if (event.key in keys) {
+        index = (index + keys[event.key] + count) % count;
+      }
+      else if (event.key === 'Home') {
+        index = 0;
+      }
+      else if (event.key === 'End') {
+        index = count - 1;
+      }
+      else {
+        return;
+      }
+      event.preventDefault();
+      this.tool = this.tools[index];
+      this.$nextTick(() => this.$refs.tabs?.[index]?.focus());
+    },
+    async copy() {
+      try {
+        await navigator.clipboard.writeText(this.snippets[this.activeTool]);
+        this.copied = true;
+      }
+      catch {
+        this.copied = false;
+      }
     },
     showResults() {
       this.$refs.browser?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -277,7 +399,9 @@ $per-pull: calc(-1 * var(--sb-block-gap, #{$block-gap}));
   margin-inline: $per-bleed;
   padding: 2rem $per-align;
 
+  // A thin line ends the map, as on the QGIS band.
   &.has-map {
+    border-bottom: 1px solid $per-line;
     display: flex;
     align-items: center;
     height: min(640px, 78vh);
@@ -293,7 +417,7 @@ $per-pull: calc(-1 * var(--sb-block-gap, #{$block-gap}));
       padding: 0;
 
       .per-hero-copy {
-        padding: 1.75rem $block-gap;
+        padding: 1.75rem $per-gutter;
       }
     }
   }
@@ -538,10 +662,6 @@ $per-pull: calc(-1 * var(--sb-block-gap, #{$block-gap}));
 }
 
 .per-qgis {
-  display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
-  gap: 40px;
-  align-items: center;
   margin: 44px $per-bleed $per-pull;
   padding: 44px $per-align;
   border-block: 1px solid $per-line;
@@ -591,8 +711,110 @@ $per-pull: calc(-1 * var(--sb-block-gap, #{$block-gap}));
     }
   }
 
+}
+
+.per-use-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 24px;
+  margin-bottom: 28px;
+
+  h2 {
+    margin: 0 !important;
+  }
+}
+
+// The tool tabs, drawn like the category chips.
+.per-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid $per-line;
+  border-radius: 999px;
+  background-color: $per-night;
+
+  button {
+    padding: 7px 18px;
+    border: 0;
+    border-radius: 999px;
+    background: none;
+    color: $per-ink-soft;
+    font-weight: $per-weight-label;
+    font-size: 0.9rem;
+
+    &:hover {
+      color: $per-ink;
+    }
+
+    &[aria-selected="true"] {
+      background-color: $per-solid-bg;
+      color: $per-solid-fg;
+    }
+  }
+}
+
+.per-use-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: 40px;
+  align-items: center;
+
   @include media-breakpoint-down(md) {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+// The code box: a bar with the language and the copy button, then the code.
+// A long URL scrolls sideways, so that the copied code stays unchanged.
+.per-code {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid $per-line;
+  border-radius: $per-radius-large;
+  background-color: $per-night;
+
+  pre {
+    margin: 0;
+    padding: 16px 20px 18px;
+    overflow-x: auto;
+    color: $per-ink;
+    font-family: $per-font-mono;
+    font-size: 0.84rem;
+    line-height: 1.6;
+  }
+
+  code {
+    color: inherit;
+    font: inherit;
+    white-space: pre;
+  }
+}
+
+.per-code-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px 8px 20px;
+  border-bottom: 1px solid $per-line;
+  color: $per-muted;
+  font-family: $per-font-mono;
+  font-size: 0.78rem;
+}
+
+#stac-browser .per-copy {
+  padding: 4px 10px;
+  border: 1px solid $per-line;
+  border-radius: $per-radius;
+  background-color: $per-paper;
+  color: $per-ink-soft;
+  font-size: 0.78rem;
+  font-weight: $per-weight-label;
+
+  &:hover {
+    border-color: $per-rosa;
+    color: $per-ink;
   }
 }
 

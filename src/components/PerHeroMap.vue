@@ -266,16 +266,14 @@ export default {
     inset: 0;
   }
 
-  // Keeps the text over the map legible: page colour on the left, and a fade
-  // into the page at the bottom.
+  // Keeps the text over the map legible with page colour on the left.
   .per-hero-veil {
     position: absolute;
     inset: 0;
     z-index: 1;
     pointer-events: none;
     background:
-      linear-gradient(90deg, rgba($per-night, 0.93) 0%, rgba($per-night, 0.62) 34%, rgba($per-night, 0) 60%),
-      linear-gradient(0deg, $per-night 0%, rgba($per-night, 0) 22%);
+      linear-gradient(90deg, rgba($per-night, 0.93) 0%, rgba($per-night, 0.62) 34%, rgba($per-night, 0) 60%);
   }
 
   // On a narrow screen: the map at a fixed height, the view buttons at its
@@ -300,14 +298,16 @@ export default {
 
     .per-hero-credit {
       position: static;
-      padding: 8px $block-gap 0;
+      padding: 8px $per-gutter;
+      border-radius: 0;
+      background-color: transparent;
     }
   }
 }
 
 .per-hero-controls {
   position: absolute;
-  right: $block-gap;
+  right: $per-gutter;
   bottom: 30px;
   z-index: 2;
   display: grid;
@@ -381,10 +381,13 @@ export default {
 
 .per-hero-credit {
   position: absolute;
-  left: $block-gap;
+  left: $per-gutter;
   bottom: 8px;
   z-index: 2;
   margin: 0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: rgba($per-paper, 0.82);
   color: $per-muted;
   font-size: 0.7rem;
 }

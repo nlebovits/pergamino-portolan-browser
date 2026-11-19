@@ -300,3 +300,65 @@ export function pmtilesSource(stac) {
   }
   return null;
 }
+
+const PARQUET_TYPES = ['application/vnd.apache.parquet', 'application/x-parquet'];
+
+function isParquet(asset) {
+  const type = typeof asset?.type === 'string' ? asset.type.split(';')[0].trim() : '';
+  if (PARQUET_TYPES.includes(type)) {
+    return true;
+  }
+  return !type && typeof asset?.href === 'string' && /\.parquet$/i.test(asset.href);
+}
+
+// The (Geo)Parquet file of a layer, for the Python and DuckDB examples.
+// Returns { url, spatial }, or null when the layer has no Parquet asset. A
+// layer is spatial when the collection names its primary geometry column
+// (table:primary_geometry).
+export function parquetSource(stac) {
+  if (!stac || typeof stac.getAssets !== 'function') {
+    return null;
+  }
+  const assets = stac.getAssets().filter(isParquet);
+  const asset = assets.find(a => Array.isArray(a.roles) && a.roles.includes('data')) || assets[0];
+  const url = absoluteUrl(asset);
+  if (!url) {
+    return null;
+  }
+  const geometry = typeof stac.getMetadata === 'function' ? stac.getMetadata('table:primary_geometry') : stac['table:primary_geometry'];
+  return { url, spatial: typeof geometry === 'string' && geometry.length > 0 };
+}
+
+// The code examples for one Parquet file: GeoPandas or pandas for Python,
+// and SQL for DuckDB. A spatial layer loads the DuckDB spatial extension, so
+// that the geometry column reads as GEOMETRY.
+export function querySnippets(source) {
+  if (!source?.url) {
+    return null;
+  }
+  const url = source.url;
+  const python = source.spatial
+    ? [
+      '# pip install geopandas pyarrow fsspec aiohttp',
+      'import geopandas as gpd',
+      '',
+      `url = "${url}"`,
+      'gdf = gpd.read_parquet(url)',
+      'gdf.head()'
+    ]
+    : [
+      '# pip install pandas pyarrow',
+      'import pandas as pd',
+      '',
+      `url = "${url}"`,
+      'df = pd.read_parquet(url)',
+      'df.head()'
+    ];
+  const duckdb = [
+    ...(source.spatial ? ['INSTALL spatial;', 'LOAD spatial;', ''] : []),
+    'SELECT *',
+    `FROM '${url}'`,
+    'LIMIT 10;'
+  ];
+  return { python: python.join('\n'), duckdb: duckdb.join('\n') };
+}

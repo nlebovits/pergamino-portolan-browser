@@ -95,18 +95,18 @@ few conflicts.
 | File | Owns |
 | --- | --- |
 | `config.js` | Catalog URL, title, `es` as the only locale. `footerLinks` is `null`, because `PerFooter` draws the footer. |
-| `home.config.js` | The featured keyword, the QGIS plugin URL, the hero map (imagery, views, layer styles, legends, credits), and the footer content |
+| `home.config.js` | The featured keyword, the official site that the demo notice links, the GitHub URL of this browser, the QGIS plugin URL, the hero map (imagery, views, layer styles, legends, credits), and the footer content |
 | `widgets.config.js` | Mounts `PerFooter` at the upstream `footer-start` hook |
 | `src/locales/es/custom.json` | "Capa", "Categoría" and "Archivo" in place of the STAC nouns, the 39 keys missing from upstream `es`, and the `pergamino.*` strings |
 | `src/theme/variables.scss` | The `$per-*` palette from the approved home design, and Chivo with Chivo Mono |
 | `src/theme/custom.scss` | Page-wide styles that use those variables: headings, cards, buttons, the footer rule |
 | `index.html` | `lang="es"`, favicons, the Chivo link, meta tags |
 | `public/pergamino/` | The white and the dark municipal logo, and the favicons from pergamino.ar |
-| `src/components/PerHeader.vue` | The white header bar: logo, wordmark, the catalog statistics, and the thin gradient rule. It has no navigation, because the site is one page. It replaces the upstream `.site` row. |
-| `src/components/PerHome.vue` + `src/utils/perHome.js` | The home view: hero with search, featured layers, the category browser with the source filter, and the QGIS band |
+| `src/components/PerHeader.vue` | The white header bar: logo, wordmark, the catalog statistics, and a GitHub link. Under it, the yellow demo strip and the thin gradient rule. It has no navigation, because the site is one page. It replaces the upstream `.site` row. |
+| `src/components/PerHome.vue` + `src/utils/perHome.js` | The home view: hero with search, featured layers, the category browser with the source filter, and the band with QGIS, Python and DuckDB tabs. The Python and DuckDB examples read the Parquet file of the first layer on view. |
 | `src/components/PerHeroMap.vue` | The 3D map of the hero. It draws the PMTiles link of each collection that `home.config.js` names. |
 | `src/components/PerLayerTile.vue` | One layer tile, for the featured row and the category grid |
-| `src/components/PerFooter.vue` | The demo notice, the Municipalidad contact, and the link columns |
+| `src/components/PerFooter.vue` | The Municipalidad contact and the link columns. A link with an `icon` shows the brand mark of its social network. |
 | `tests/unit/perHome.spec.js` | Unit tests for the home accessors |
 | `basemaps.config.js` | `MAP_CONSTRAINTS`, from the bbox of `limites/partido_pergamino` |
 | `verify-pergamino.mjs` | Browser checks at desktop and mobile size |
@@ -138,7 +138,8 @@ These upstream files carry small supporting edits:
   catalog `keywords`. Tag them in pergamino-ide-catalog.
 - The design is light only, with no theme toggle. The yellow to pink gradient
   appears only as the thin rule under the header and over the footer. Use
-  text labels, not icon sets.
+  text labels, not icon sets. The exceptions are brand marks: the GitHub link
+  in the header and the social networks in the footer.
 - Report a defect that every portolan-browser deployment has upstream. Do not
   patch it here unless a person approves the patch.
 

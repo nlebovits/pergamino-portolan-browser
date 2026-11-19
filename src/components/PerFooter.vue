@@ -1,9 +1,5 @@
 <template>
   <div v-if="footer" class="per-footer">
-    <p class="per-footer-notice">
-      <strong>{{ $t('pergamino.footer.demo') }}</strong>
-      {{ $t('pergamino.footer.notOfficial') }}
-    </p>
     <div class="per-footer-grid">
       <div v-if="contact" class="per-footer-contact">
         <img :src="logo" :alt="$t('pergamino.logoAlt')" class="per-footer-logo">
@@ -19,9 +15,12 @@
       </div>
       <nav v-for="column in columns" :key="column.title" :aria-label="column.title">
         <h2>{{ column.title }}</h2>
-        <ul>
+        <ul :class="{ 'per-footer-icons': column.links.every(link => icons[link.icon]) }">
           <li v-for="link in column.links" :key="link.url">
-            <a :href="link.url" target="_blank" rel="noopener noreferrer">{{ link.label }}</a>
+            <a :href="link.url" target="_blank" rel="noopener noreferrer" :aria-label="icons[link.icon] ? link.label : null" :title="icons[link.icon] ? link.label : null">
+              <component :is="icons[link.icon]" v-if="icons[link.icon]" aria-hidden="true" />
+              <template v-else>{{ link.label }}</template>
+            </a>
           </li>
         </ul>
       </nav>
@@ -30,16 +29,32 @@
 </template>
 
 <script>
+import { markRaw } from 'vue';
+import BrandFacebook from '~icons/bi/facebook';
+import BrandInstagram from '~icons/bi/instagram';
+import BrandTiktok from '~icons/bi/tiktok';
+import BrandX from '~icons/bi/twitter-x';
+import BrandYoutube from '~icons/bi/youtube';
 import homeConfig from '../../home.config';
 
-// The footer of every page: a notice that this site is a demo, the contact
-// details of the Municipalidad, and the link columns. widgets.config.js mounts
+// The brand marks of the social networks, by the `icon` key of a footer link.
+const ICONS = markRaw({
+  facebook: BrandFacebook,
+  instagram: BrandInstagram,
+  tiktok: BrandTiktok,
+  x: BrandX,
+  youtube: BrandYoutube
+});
+
+// The footer of every page: the contact details of the Municipalidad and the
+// link columns. widgets.config.js mounts
 // it at the upstream `footer-start` hook. home.config.js holds its content.
 export default {
   name: 'PerFooter',
   data() {
     return {
-      footer: homeConfig.footer || null
+      footer: homeConfig.footer || null,
+      icons: ICONS
     };
   },
   computed: {
@@ -83,19 +98,6 @@ export default {
   }
 }
 
-.per-footer-notice {
-  margin: 0 0 1.5rem;
-  padding: 0.75rem 1rem;
-  border: 1px solid $per-line;
-  border-radius: $per-radius;
-  background-color: $per-paper;
-  color: $per-ink-soft;
-
-  strong {
-    color: $per-ink;
-  }
-}
-
 .per-footer-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr));
@@ -107,6 +109,35 @@ export default {
 
   @include media-breakpoint-down(sm) {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+// A row of brand marks in place of a list of names.
+#stac-browser .per-footer-icons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+
+  li {
+    padding: 0;
+  }
+
+  a {
+    display: grid;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border: 1px solid $per-line;
+    border-radius: 50%;
+    background-color: $per-paper;
+    color: $per-ink-soft;
+    font-size: 1rem;
+
+    &:hover,
+    &:focus-visible {
+      border-color: $per-rosa;
+      color: $per-ink;
+    }
   }
 }
 

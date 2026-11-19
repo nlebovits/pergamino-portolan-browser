@@ -4,6 +4,10 @@
 // variables.scss. Do not put a hex literal here.
 
 #stac-browser {
+  // Bootstrap pads the container by half of --bs-gutter-x. This sets that
+  // padding to the gutter.
+  --bs-gutter-x: calc(2 * #{$per-gutter});
+
   // PerHeader and the home view span the viewport with calc(50% - 50vw).
   // Clip so that the 50vw term cannot add a horizontal scrollbar.
   overflow-x: clip;

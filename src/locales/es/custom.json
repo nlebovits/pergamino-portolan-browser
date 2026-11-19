@@ -102,6 +102,7 @@
   "pergamino": {
     "logoAlt": "Municipalidad de Pergamino",
     "about": "Acerca del catálogo",
+    "sourceCode": "Código fuente de este navegador en GitHub",
     "hero": {
       "views": "Vista del mapa"
     },
@@ -131,8 +132,26 @@
       "noMatches": "Ninguna capa coincide con la búsqueda.",
       "showAll": "Ver las {count} capas de {category}",
       "showAllResults": "Ver los {count} resultados",
+      "showLess": "Ver menos",
+      "use": {
+        "title": "Usá estas capas en QGIS, Python o DuckDB",
+        "tools": "Herramientas",
+        "example": "Capa del ejemplo: {layer}. El ejemplo sigue la categoría elegida.",
+        "copy": "Copiar",
+        "copied": "Copiado",
+        "qgis": {
+          "tab": "QGIS"
+        },
+        "python": {
+          "tab": "Python",
+          "text": "Leé cualquier capa en Python desde su dirección en Source Cooperative. GeoPandas devuelve las capas con geometría como un GeoDataFrame."
+        },
+        "duckdb": {
+          "tab": "DuckDB",
+          "text": "Consultá cualquier capa con SQL desde su dirección en Source Cooperative. DuckDB lee solo las partes del archivo que pide la consulta."
+        }
+      },
       "qgis": {
-        "title": "Abrí estas capas en QGIS",
         "text": "El complemento Portolan Registry lista los catálogos registrados, incluido este. Agrega cada capa al mapa con su propio estilo y descarga solo el área que necesitás.",
         "button": "Ver el complemento",
         "requirements": "Requiere QGIS 3.34 o posterior. Para GeoParquet, DuckDB 1.5.0 o posterior.",
@@ -142,9 +161,11 @@
         "step3": "Abrí el panel del complemento y elegí {catalog} en la lista de catálogos."
       }
     },
+    "demo": {
+      "notOfficial": "Este navegador es una demostración, no un sitio oficial de la Municipalidad de Pergamino. Para trámites e información oficial, visitá {site}.",
+      "site": "pergamino.ar"
+    },
     "footer": {
-      "demo": "Sitio de demostración.",
-      "notOfficial": "Este navegador no es un sitio oficial de la Municipalidad de Pergamino. Para trámites e información oficial, visitá pergamino.ar.",
       "contact": "Contacto de la Municipalidad"
     }
   }

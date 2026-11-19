@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Catalog, Collection } from 'stac-js';
 import {
   allEntries, childKind, collectionUrl, featuredEntries, filterEntries, fold, homeGroups,
-  pmtilesSource, producers, sourceOf, sourceOptions, thumbnailOf
+  parquetSource, pmtilesSource, producers, querySnippets, sourceOf, sourceOptions, thumbnailOf
 } from '../../src/utils/perHome.js';
 
 // A miniature of the IDE Pergamino catalog: root -> category sub-catalogs ->
@@ -308,6 +308,62 @@ describe('perHome', () => {
       );
       expect(pmtilesSource(unnamed)).toBeNull();
       expect(pmtilesSource(null)).toBeNull();
+    });
+  });
+  describe('parquetSource', () => {
+    const layer = (assets, extra = {}) => new Collection(
+      { ...collectionJson('x', { assets }), ...extra },
+      `${BASE}x/collection.json`
+    );
+
+    it('reads the GeoParquet data asset of a spatial layer', () => {
+      const stac = layer({
+        tiles: { href: './x.pmtiles', type: 'application/vnd.pmtiles', roles: ['data'] },
+        data: { href: './x.parquet', type: 'application/vnd.apache.parquet', roles: ['data'] }
+      }, { 'table:primary_geometry': 'geometry' });
+      expect(parquetSource(stac)).toEqual({ url: `${BASE}x/x.parquet`, spatial: true });
+    });
+
+    it('marks a table without a primary geometry as not spatial', () => {
+      const stac = layer({ data: { href: './t.parquet', type: 'application/vnd.apache.parquet', roles: ['data'] } });
+      expect(parquetSource(stac)).toEqual({ url: `${BASE}x/t.parquet`, spatial: false });
+    });
+
+    it('prefers the data role and accepts a media type parameter or a bare .parquet href', () => {
+      const stac = layer({
+        sample: { href: './sample.parquet', type: 'application/vnd.apache.parquet; profile=sample', roles: ['metadata'] },
+        data: { href: './full.parquet', roles: ['data'] }
+      });
+      expect(parquetSource(stac).url).toBe(`${BASE}x/full.parquet`);
+    });
+
+    it('returns null for a raster layer or missing input', () => {
+      const { pleiades } = makeCatalog();
+      expect(parquetSource(pleiades)).toBeNull();
+      expect(parquetSource(null)).toBeNull();
+    });
+  });
+
+  describe('querySnippets', () => {
+    const url = 'https://example.com/x.parquet';
+
+    it('uses GeoPandas and the spatial extension for a spatial layer', () => {
+      const { python, duckdb } = querySnippets({ url, spatial: true });
+      expect(python).toContain('import geopandas as gpd');
+      expect(python).toContain(`url = "${url}"`);
+      expect(python).toContain('gpd.read_parquet(url)');
+      expect(duckdb).toBe(`INSTALL spatial;\nLOAD spatial;\n\nSELECT *\nFROM '${url}'\nLIMIT 10;`);
+    });
+
+    it('uses pandas and plain SQL for a table', () => {
+      const { python, duckdb } = querySnippets({ url, spatial: false });
+      expect(python).toContain('pd.read_parquet(url)');
+      expect(python).not.toContain('geopandas');
+      expect(duckdb).toBe(`SELECT *\nFROM '${url}'\nLIMIT 10;`);
+    });
+
+    it('returns null without a file', () => {
+      expect(querySnippets(null)).toBeNull();
     });
   });
 });

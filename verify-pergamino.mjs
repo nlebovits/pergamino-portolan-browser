@@ -48,6 +48,7 @@ const TOKENS = {
   raise: 'rgb(239, 233, 241)',     // $per-raise, #efe9f1
   pageBg: 'rgb(247, 244, 248)',    // $per-night, #f7f4f8
   sol: 'rgb(251, 205, 73)',        // $per-sol, #fbcd49
+  line: 'rgb(221, 212, 224)',       // $per-line, #ddd4e0
   rosa: 'rgb(240, 127, 175)',      // $per-rosa, #f07faf
   font: /^"?Chivo"?,/,
   mono: /^"?Chivo Mono"?,/,
@@ -209,8 +210,16 @@ const shell = await page.evaluate(() => {
     headerBg: cs(header)?.backgroundColor,
     headerRule: cs(header)?.borderImageSource,
     headerRuleWidth: cs(header)?.borderBottomWidth,
-    actions: [...document.querySelectorAll('.per-header .per-action')].map(a => a.innerText.trim()),
+    actions: [...document.querySelectorAll('.per-header .per-action')].map(a => a.innerText.trim()).filter(Boolean),
+    sourceLink: document.querySelector('.per-header .per-source-link')?.href || '',
+    sourceLabel: document.querySelector('.per-header .per-source-link')?.getAttribute('aria-label') || '',
     icons: document.querySelectorAll('.per-header svg').length,
+    demo: document.querySelector('.per-header .per-demo')?.innerText.trim() || '',
+    demoLink: document.querySelector('.per-header .per-demo a')?.href || '',
+    demoTop: document.querySelector('.per-header .per-demo')?.getBoundingClientRect().top,
+    demoBg: cs(document.querySelector('.per-header .per-demo'))?.backgroundColor,
+    demoWidth: document.querySelector('.per-header .per-demo')?.getBoundingClientRect().width,
+    barBottom: document.querySelector('.per-header .per-inner')?.getBoundingClientRect().bottom,
     brandHref: document.querySelector('.per-brand')?.getAttribute('href'),
     logoSrc: logo?.getAttribute('src'),
     logoLoaded: !!logo && logo.complete && logo.naturalWidth > 0,
@@ -228,12 +237,14 @@ const shell = await page.evaluate(() => {
     footerRuleWidth: cs(footer)?.borderTopWidth,
     footerText: footer?.innerText || '',
     footerLinks: [...(footer?.querySelectorAll('a') || [])].map(a => ({ text: a.innerText.trim(), href: a.href })),
+    footerIcons: [...(footer?.querySelectorAll('.per-footer-icons a') || [])].map(a => ({ label: a.getAttribute('aria-label'), svg: !!a.querySelector('svg') })),
+    edges: ['.per-logo', '.per-hero h1', '#stac-browser > footer .per-footer'].map(sel => Math.round(document.querySelector(sel)?.getBoundingClientRect().left ?? -1)),
   };
 });
 check('header is a white bar', shell.headerBg === TOKENS.paper, shell.headerBg);
 check(`header has the ${RULE_WIDTH} brand rule`, shell.headerRuleWidth === RULE_WIDTH && shell.headerRule?.includes(TOKENS.sol) && shell.headerRule?.includes(TOKENS.rosa), `${shell.headerRuleWidth} ${shell.headerRule}`);
 check('header has no navigation, only "Acerca del catálogo"', JSON.stringify(shell.actions) === JSON.stringify(['Acerca del catálogo']), shell.actions.join(' | '));
-check('header has no icons', shell.icons === 0, `${shell.icons} svg`);
+check('header has one icon, the GitHub link to the browser source', shell.icons === 1 && shell.sourceLink === homeConfig.sourceUrl && shell.sourceLabel.length > 0, `${shell.icons} svg; ${shell.sourceLink}`);
 check('logo and wordmark link to the home page', typeof shell.brandHref === 'string', shell.brandHref);
 check('dark municipal logo loads', shell.logoLoaded && /pergamino\/logo-municipalidad-tinta\.svg$/.test(shell.logoSrc || ''), shell.logoSrc);
 check('logo has alt text', shell.logoAlt === 'Municipalidad de Pergamino', shell.logoAlt);
@@ -248,7 +259,10 @@ check('body text is #231e26', shell.bodyColor === TOKENS.ink, shell.bodyColor);
 check('page background is #f7f4f8', shell.bodyBg === TOKENS.pageBg, shell.bodyBg);
 check('h1 is #231e26', shell.h1Color === TOKENS.ink, shell.h1Color);
 check(`footer has the ${RULE_WIDTH} brand rule`, shell.footerRuleWidth === RULE_WIDTH && shell.footerRule?.includes(TOKENS.sol), `${shell.footerRuleWidth} ${shell.footerRule}`);
-check('footer says the site is a demo', /Sitio de demostración/.test(shell.footerText) && /no es un sitio oficial/.test(shell.footerText));
+check('header says the site is a demo and not official', /^🚧/.test(shell.demo) && /demostración, no un sitio oficial/.test(shell.demo), shell.demo);
+check('demo notice links the official site', shell.demoLink === homeConfig.officialSiteUrl, shell.demoLink);
+check('demo notice is a yellow strip under the bar, across the window', shell.demoBg === TOKENS.sol && Math.abs(shell.demoTop - shell.barBottom) < 1 && shell.demoWidth >= DESKTOP.width - 20, `${shell.demoBg}, ${Math.round(shell.demoWidth)}px wide`);
+check('footer has no demo notice', !/demostración/.test(shell.footerText));
 check('footer shows the Municipalidad contact', shell.footerText.includes(homeConfig.footer.contact.email) && shell.footerText.includes(homeConfig.footer.contact.address));
 const emergency = EMERGENCY.filter(n => new RegExp(`(^|\\D)${n}(\\D|$)`).test(shell.footerText) || shell.footerLinks.some(l => l.href === `tel:${n}`));
 check('footer lists no emergency numbers', emergency.length === 0, emergency.join(', ') || 'none');
@@ -259,6 +273,11 @@ check('footer links to the official GeoNode viewer', fl.some(l => l.href.include
 check('footer links to pergamino.ar', fl.some(l => /^https:\/\/pergamino\.ar\/?$/.test(l.href)), labels);
 check('footer links to the license', fl.some(l => l.href.includes('creativecommons.org/licenses/by-sa/4.0')), labels);
 check('footer links to the source code', fl.some(l => l.href.includes('github.com')), labels);
+const social = homeConfig.footer.columns.flatMap(c => c.links).filter(l => l.icon);
+check(`footer shows ${social.length} social networks as named icons`, shell.footerIcons.length === social.length && shell.footerIcons.every((x, i) => x.svg && x.label === social[i].label), shell.footerIcons.map(x => x.label).join(' | '));
+// The layout spans the window. Content keeps the gutter from its edges.
+const edge = Math.max(20, Math.min(56, DESKTOP.width * 0.04));
+check(`logo, hero text and footer keep the ${edge}px gutter`, shell.edges.every(x => Math.abs(x - edge) <= 1), shell.edges.join(', '));
 
 // Hover and keyboard focus of the header action.
 await page.hover('.per-header .per-action');
@@ -286,9 +305,11 @@ const heroInfo = await page.evaluate(() => ({
   credit: document.querySelector('.per-hero-credit')?.innerText.trim(),
   pageRow: !!document.querySelector('#stac-browser > header .page'),
   heroTop: document.querySelector('.per-hero')?.getBoundingClientRect().top,
+  heroLine: getComputedStyle(document.querySelector('.per-hero')).borderBottom,
   headerBottom: document.querySelector('#stac-browser > header')?.getBoundingClientRect().bottom,
 }));
 check('hero headline', heroInfo.h1 === 'Pergamino, en datos abiertos', heroInfo.h1);
+check('hero ends on a thin grey line', heroInfo.heroLine === `1px solid ${TOKENS.line}`, heroInfo.heroLine);
 check('hero meets the header', Math.abs(heroInfo.heroTop - heroInfo.headerBottom) < 1, `${heroInfo.heroTop} vs ${heroInfo.headerBottom}`);
 check('root has no title row', !heroInfo.pageRow);
 if (hero) {
@@ -356,6 +377,17 @@ if (catalog) {
     await page.waitForTimeout(500);
     g = await grid();
     check(`the button shows all ${first.count} layers`, g.tiles === first.count, `${g.tiles} tiles`);
+    check('the expanded grid offers "Ver menos"', g.more === 'Ver menos', g.more);
+    await page.click('.per-more button');
+    await page.waitForTimeout(900);
+    g = await grid();
+    const back = await page.evaluate(() => {
+      const head = document.querySelector('#per-browser-heading').getBoundingClientRect();
+      const header = document.querySelector('#stac-browser > header').getBoundingClientRect();
+      return { top: Math.round(head.top), headerBottom: Math.round(header.bottom), height: window.innerHeight };
+    });
+    check(`"Ver menos" collapses the grid to ${PAGE_SIZE} tiles`, g.tiles === PAGE_SIZE && g.more?.startsWith('Ver las'), `${g.tiles} tiles; ${g.more}`);
+    check('"Ver menos" brings the browser heading back into view, under the header', back.top >= back.headerBottom && back.top < back.height, `heading at ${back.top}, header ends at ${back.headerBottom}`);
   }
   const other = catalog.topics[catalog.topics.length - 1];
   await page.locator('.per-chips button', { hasText: other.title }).click();
@@ -420,6 +452,29 @@ if (catalog) {
     stock: !!document.querySelector('.catalogs-container'),
   }));
   check('QGIS band links the plugin', qgis.href === homeConfig.qgisPluginUrl && qgis.steps === 3, qgis.href);
+  const band = async () => page.evaluate(() => ({
+    tabs: [...document.querySelectorAll('.per-qgis [role="tab"]')].map(t => ({ text: t.innerText.trim(), selected: t.getAttribute('aria-selected') === 'true' })),
+    panel: document.querySelector('.per-qgis [role="tabpanel"]')?.getAttribute('aria-labelledby'),
+    code: document.querySelector('.per-qgis pre code')?.textContent || '',
+    focus: document.activeElement?.id || '',
+  }));
+  let b = await band();
+  check('the band has tabs for QGIS, Python and DuckDB, with QGIS open', b.tabs.map(t => t.text).join('|') === 'QGIS|Python|DuckDB' && b.tabs[0].selected && b.panel === 'per-tab-qgis', b.tabs.map(t => `${t.text}${t.selected ? '*' : ''}`).join(' | '));
+  await page.focus('#per-tab-qgis');
+  await page.keyboard.press('Tab');
+  b = await band();
+  check('Tab moves from the QGIS tab to the Python tab', b.focus === 'per-tab-python', b.focus);
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(300);
+  b = await band();
+  const parquetUrl = (b.code.match(/url = "([^"]+\.parquet)"/) || [])[1];
+  check('the Python tab shows a read_parquet example', b.panel === 'per-tab-python' && /read_parquet\(url\)/.test(b.code) && !!parquetUrl, parquetUrl);
+  const head = parquetUrl ? await page.request.fetch(parquetUrl, { method: 'HEAD' }) : null;
+  check('the example file exists', head?.status() === 200, `${head?.status()} ${parquetUrl}`);
+  await page.keyboard.press('ArrowRight');
+  await page.waitForTimeout(300);
+  b = await band();
+  check('ArrowRight opens the DuckDB tab and focuses it', b.panel === 'per-tab-duckdb' && b.focus === 'per-tab-duckdb' && b.code.includes(`FROM '${parquetUrl}'`), b.code.split('\n').join(' / '));
   check('root description column is hidden', !qgis.meta);
   check('stock catalog grid is hidden on the root', !qgis.stock);
 
@@ -544,10 +599,12 @@ for (const [name, path] of mobilePages) {
   const m = await page.evaluate(() => ({
     header: document.querySelector('.per-header')?.getBoundingClientRect().height,
     logo: document.querySelector('.per-logo')?.getBoundingClientRect().width,
+    demo: document.querySelector('.per-header .per-demo')?.getBoundingClientRect().height || 0,
   }));
   await noOverflow(`${name} mobile`);
   if (name === '01-home') {
     check('header renders on mobile', m.header > 0 && m.logo > 0, `${Math.round(m.header)}px high`);
+    check('demo notice shows on mobile', m.demo > 0, `${Math.round(m.demo)}px high`);
     const layout = await page.evaluate(() => {
       const cols = sel => { const e = document.querySelector(sel); return e ? getComputedStyle(e).gridTemplateColumns.split(' ').length : null; };
       const copy = document.querySelector('.per-hero-copy')?.getBoundingClientRect();
