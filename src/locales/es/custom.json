@@ -73,7 +73,8 @@
       "reprojectionFailed": "Ningún objeto se pudo ubicar en el mapa. El archivo declara {crs}, pero sus coordenadas quedan fuera de ese sistema. Es posible que el CRS declarado no coincida con los datos.",
       "tooBig": "El archivo GeoParquet es demasiado grande para cargarlo en el mapa ({size} MB, límite {maxSize} MB).",
       "tooLarge": "Los datos GeoParquet tienen {count} objetos, demasiados para mostrarlos en el mapa (límite: {max})."
-    }
+    },
+    "zoomIn": "Los datos empiezan en el zoom {zoom}. Acercá el mapa para verlos."
   },
   "metadata": {
     "additional": "Metadatos adicionales"
@@ -144,11 +145,11 @@
         },
         "python": {
           "tab": "Python",
-          "text": "Leé cualquier capa en Python desde su dirección en Source Cooperative. GeoPandas devuelve las capas con geometría como un GeoDataFrame."
+          "text": "Leé en Python cualquier capa en GeoParquet desde su dirección en Source Cooperative. GeoPandas devuelve las capas con geometría como un GeoDataFrame."
         },
         "duckdb": {
           "tab": "DuckDB",
-          "text": "Consultá cualquier capa con SQL desde su dirección en Source Cooperative. DuckDB lee solo las partes del archivo que pide la consulta."
+          "text": "Consultá con SQL cualquier capa en GeoParquet desde su dirección en Source Cooperative. DuckDB lee solo las partes del archivo que pide la consulta."
         }
       },
       "qgis": {

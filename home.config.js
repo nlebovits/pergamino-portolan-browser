@@ -70,109 +70,68 @@ export default {
     ]
   },
 
-  // The map at the top of the home page. Set to null to show no map.
+  // The map at the top of the home page. Set to null to show no map. The
+  // map opens on the camera of the first view and has no animation. The
+  // visitor can drag it, but cannot zoom, rotate or tilt it.
   hero: {
     // The ground colour where no imagery covers the map.
     background: '#e4e0e6',
 
-    // Raster imagery under every view, bottom first. MapLibre requests a tile
-    // only inside `bounds` and between `minzoom` and `maxzoom`. Outside the
-    // bounds, the map shows `background`.
+    // Imagery under the views, bottom first. An entry is one of:
+    //
+    // - A COG asset of a catalog collection: `collection` is its path below
+    //   the root catalog, and `asset` is the asset key. The map reads only
+    //   the tiles in view.
+    // - Raster tiles: `tiles` is a list of XYZ URLs, with optional `bounds`,
+    //   `minzoom` and `maxzoom`.
     imagery: [
       {
-        id: 'conae',
-        tiles: ['https://geotematico01.conae.gov.ar/geoserver/gwc/service/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0'
-          + '&LAYER=Localidades:BuenosAires_Pergamino_2024&STYLE=raster&TILEMATRIXSET=EPSG:900913&FORMAT=image/jpeg'
-          + '&TILEMATRIX=EPSG:900913:{z}&TILEROW={y}&TILECOL={x}'],
-        bounds: [-60.6624, -33.9605, -60.4410, -33.8359],
-        minzoom: 11,
-        maxzoom: 18,
-        attribution: 'Imagen: CONAE, Pleiades Neo 2024'
+        // One RGB image of all 33 orthophoto mosaics, at 1 m in EPSG:3857.
+        id: 'ortofotos',
+        collection: 'imagenes/ortofotos_10cm_2022',
+        asset: 'overview',
+        attribution: 'Imagen: ortofotos 2022, Municipalidad de Pergamino'
       }
     ],
 
-    // One button per view, in this order. The first view opens the page.
+    // The first view opens the page. A second view adds a button for each.
     //
     // Each layer names a collection by its path below the root catalog. The
-    // browser loads that collection and draws its PMTiles link. A view whose
-    // collections fail to load still shows its imagery. The other keys of a
-    // layer are MapLibre layer properties (`type`, `filter`, `paint`).
+    // browser loads that collection and draws its PMTiles link. The other
+    // keys of a layer are MapLibre layer properties (`type`, `filter`,
+    // `paint`).
     //
-    // `legend.colors` draws a colour ramp. `attribution` joins the imagery
-    // credits under the map.
+    // `legend.colors` draws a colour ramp. `attribution` shows under the map.
     views: [
       {
         id: 'edificios',
         label: 'Edificios',
-        camera: { center: [-60.5738, -33.8952], zoom: 15.5, pitch: 62, bearing: -30 },
-        imagery: { brightness: 0.95, saturation: -0.1 },
-        attribution: 'Edificios: Catastro, Municipalidad de Pergamino',
+        camera: { center: [-60.5738, -33.8952], zoom: 16.5, pitch: 55, bearing: -30 },
+        attribution: 'Edificios: Municipalidad de Pergamino y Google Research, Open Buildings 2023',
         layers: [
           {
-            // `clase` is "cubierto", "semicubierto" or "pileta". The map
-            // leaves out pools. `alt-piso` is the storey height in metres.
-            collection: 'catastro/edificaciones_pb',
+            // `altura_promedio` is the mean height of the footprint in metres:
+            // median 3 m, 52 m at most in the November 2026 data. A value of 0
+            // has no height, so the map draws it as one storey of 3 m.
+            collection: 'catastro/edificaciones_automaticas',
             type: 'fill-extrusion',
-            filter: ['!=', ['get', 'clase'], 'pileta'],
             paint: {
-              'fill-extrusion-color': ['case', ['==', ['get', 'clase'], 'semicubierto'], '#cdc4ba',
-                ['interpolate', ['linear'], ['coalesce', ['get', 'alt-piso'], 3], 3, '#efe7dc', 6, '#f6dc8a']],
-              'fill-extrusion-height': ['min', ['max', ['coalesce', ['get', 'alt-piso'], 3], 3], 8],
-              'fill-extrusion-opacity': 0.95,
-              'fill-extrusion-vertical-gradient': true
-            }
-          },
-          {
-            // Upper floors start on the ground floor. Rooftop pools stay out. `pisos` counts the
-            // storeys of this footprint and arrives as a string. The colour
-            // follows the height of the top: 6 m for one storey, 39 m at most
-            // in the November 2026 data.
-            collection: 'catastro/edificaciones_pa',
-            type: 'fill-extrusion',
-            filter: ['!=', ['get', 'clase'], 'pileta'],
-            paint: {
-              'fill-extrusion-base': 3,
-              'fill-extrusion-height': ['+', 3, ['*', ['to-number', ['get', 'pisos'], 1], ['coalesce', ['get', 'alt-piso'], 3]]],
+              'fill-extrusion-height': ['max', ['coalesce', ['get', 'altura_promedio'], 0], 3],
               'fill-extrusion-color': ['interpolate', ['linear'],
-                ['+', 3, ['*', ['to-number', ['get', 'pisos'], 1], ['coalesce', ['get', 'alt-piso'], 3]]],
-                6, '#f6dc8a', 12, '#fbcd49', 20, '#f59a8f', 30, '#f07faf', 39, '#c42a72'],
+                ['max', ['coalesce', ['get', 'altura_promedio'], 0], 3],
+                3, '#efe7dc', 6, '#f6dc8a', 12, '#fbcd49', 20, '#f59a8f', 30, '#f07faf', 52, '#c42a72'],
               'fill-extrusion-opacity': 0.95,
               'fill-extrusion-vertical-gradient': true
             }
           }
         ],
+        // The legend counts pisos at 3 m each: 3 m is 1 piso, 52 m is 17.
         legend: {
-          title: 'Altura de las construcciones',
+          title: 'Altura de los edificios',
           colors: ['#efe7dc', '#f6dc8a', '#fbcd49', '#f59a8f', '#f07faf', '#c42a72'],
-          min: '3 m',
-          max: '39 m',
-          note: 'Pasá el cursor por un edificio'
-        },
-        tooltip: p => {
-          if (p.pisos) {
-            return { title: `${p.pisos} ${Number(p.pisos) === 1 ? 'piso' : 'pisos'} en planta alta`, text: p.barrio };
-          }
-          const kind = { cubierto: 'Construcción cubierta', semicubierto: 'Construcción semicubierta' };
-          return { title: kind[p.clase] || 'Construcción', text: p.barrio };
+          min: '1 piso',
+          max: '17 pisos'
         }
-      },
-      {
-        id: 'satelite',
-        label: 'Satélite',
-        camera: { center: [-60.573, -33.893], zoom: 13.2, pitch: 0, bearing: 0 },
-        imagery: { brightness: 1, saturation: 0 },
-        layers: [
-          {
-            collection: 'limites/barrios',
-            type: 'line',
-            paint: { 'line-color': '#ffffff', 'line-width': 1.2, 'line-opacity': 0.85 }
-          }
-        ],
-        legend: {
-          title: 'Barrios de la ciudad',
-          note: 'Sobre la imagen Pleiades Neo de 2024'
-        },
-        tooltip: null
       }
     ]
   }

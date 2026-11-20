@@ -710,6 +710,51 @@ describe('StacMapLayer', () => {
       expect(after.props).toBe(before.props)
     })
 
+    // A Portolan style can fade everything outside the catalog area with an
+    // inline mask layer. The COGs must draw under it, inside the map style.
+    const maskStyle = {
+      version: 8,
+      sources: {
+        mascara: { type: 'geojson', data: { type: 'Polygon', coordinates: [[[-180, -85], [180, -85], [180, 85], [-180, -85]]] } },
+      },
+      layers: [{ id: 'mascara', type: 'fill', source: 'mascara', paint: { 'fill-color': '#fff', 'fill-opacity': 0.85 } }],
+    }
+
+    it('interleaves the COGs into the map style', async () => {
+      const assets = [cogAsset('a')]
+      dlayer.setStac(fakeStac(assets))
+      await dlayer.setAssets(assets)
+      expect(dlayer._deckOverlay.props.interleaved).toBe(true)
+    })
+
+    it('draws the COGs under the first layer of the collection style', async () => {
+      const assets = [cogAsset('a')]
+      dlayer.setStac(fakeStac(assets))
+      await dlayer.setAssets(assets)
+      expect(dlayer._deckOverlay.props.layers[0].props.beforeId).toBeUndefined()
+      dlayer.applyGlStyle(maskStyle)
+      await tick()
+      expect(dlayer._deckOverlay.props.layers[0].props.beforeId).toBe('mascara')
+    })
+
+    it('keeps the props object while the anchor stays the same', async () => {
+      const assets = [cogAsset('a'), cogAsset('b')]
+      dlayer.setStac(fakeStac(assets))
+      await dlayer.setAssets([assets[0]])
+      dlayer.applyGlStyle(maskStyle)
+      await tick()
+      const anchored = dlayer._deckOverlay.props.layers[0].props
+      await dlayer.setCogVisible('b', true)
+      const a = dlayer._deckOverlay.props.layers.find(l => l.props.id === 'stac-cog-a')
+      expect(a.props).toBe(anchored)
+      expect(a.props.beforeId).toBe('mascara')
+    })
+
+    it('counts the deck layer groups as its own layers', () => {
+      dmap.addLayer({ id: 'deck-layer-group-before:mascara', type: 'custom' })
+      expect(dlayer._ownLayerIds().has('deck-layer-group-before:mascara')).toBe(true)
+    })
+
     it('prunes cached layers that drop off the list', async () => {
       const assets = Array.from({ length: 9 }, (_, i) => cogAsset(`c${i}`))
       dlayer.setStac(fakeStac(assets))

@@ -73,7 +73,10 @@ const COLLECTIONS = [
   { key: 'polygon', path: 'demografia/icv/collection.json', note: 'Polygon with a legend' },
   { key: 'inta', path: 'ambiente-y-agro/inta_mnc_2018_2019/collection.json', note: 'INTA producer' },
   { key: 'arba', path: 'catastro/parcela/collection.json', note: 'ARBA producer' },
-  { key: 'table', path: 'vialidad/callejero_listado/collection.json', note: 'no geometry' },
+  { key: 'virtual', path: 'comercio-y-cultura/lugares_overture/collection.json', note: 'Overture data, linked and not copied' },
+  { key: 'imagery', path: 'imagenes/ortofotos_10cm_2022/collection.json', note: 'COG items with an overview' },
+  { key: 'raster', path: 'ambiente-y-agro/glofas_peligro_rp100/collection.json', note: 'external COG' },
+  { key: 'buildings', path: 'catastro/edificios_overture/collection.json', note: 'Overture tiles from zoom 13' },
 ];
 
 const DESKTOP = { width: 1440, height: 900 };
@@ -110,6 +113,33 @@ function sourceOf(json) {
   const producer = named.find(p => (p.roles || []).includes('producer'));
   return (producer || named[0])?.name.trim() || '';
 }
+// The Parquet file of the code examples, as src/utils/perHome.js
+// parquetSource() picks it: a Parquet asset with the `data` role, or without
+// roles, and never one with the `external` role.
+function exampleParquet(json, url) {
+  const assets = Object.values(json.assets || {}).filter(a => {
+    const type = String(a.type || '').split(';')[0].trim();
+    const parquet = ['application/vnd.apache.parquet', 'application/x-parquet'].includes(type) || (!type && /\.parquet$/i.test(a.href || ''));
+    return parquet && !(a.roles || []).includes('external');
+  });
+  const asset = assets.find(a => (a.roles || []).includes('data')) || assets.find(a => !(a.roles || []).length);
+  return asset ? new URL(asset.href, url).href : null;
+}
+// The default style of a collection, or null.
+async function defaultStyle(json, url) {
+  const styles = Object.values(json.assets || {}).filter(a => (a.roles || []).includes('style'));
+  const asset = styles.find(a => a.roles.includes('default')) || styles[0];
+  return asset ? getJson(new URL(asset.href, url).href).catch(() => null) : null;
+}
+// The lowest zoom at which a style draws the collection data, as
+// src/utils/portolanStyles.js dataMinZoom() reads it.
+function styleMinZoom(style) {
+  const sources = style?.sources || {};
+  const isData = s => s && (s.type === 'geojson' ? !s.data : !['raster', 'raster-dem', 'image', 'video'].includes(s.type));
+  const zooms = (style?.layers || []).filter(l => isData(sources[l.source])).map(l => (typeof l.minzoom === 'number' ? l.minzoom : 0));
+  return zooms.length ? Math.min(...zooms) : null;
+}
+const isCog = a => /profile=cloud-optimized/.test(a.type || '');
 function isFeatured(json, url) {
   const word = String(homeConfig.featuredKeyword || '').trim().toLowerCase();
   const tagged = FEATURE_PATHS.some(f => url.endsWith(`/${f}/collection.json`));
@@ -185,6 +215,14 @@ page.on('console', m => { if (m.type() === 'error') consoleErrors.push(`${page.u
 page.on('pageerror', e => consoleErrors.push(`${page.url()} :: pageerror: ${e.message}`));
 const tileRequests = [];
 page.on('request', r => { if (TILE_HOSTS.test(r.url())) tileRequests.push(r.url()); });
+// Cross-origin resource timing reports no sizes, so count the response headers.
+let pmtilesBytes = 0;
+let imageryBytes = 0;
+page.on('response', r => {
+  const size = Number(r.headers()['content-length'] || 0);
+  if (/\.pmtiles/.test(r.url())) pmtilesBytes += size;
+  else if (/\.tif$/.test(r.url())) imageryBytes += size;
+});
 
 async function open(url, wait = 3000) {
   await page.goto(url, { waitUntil: 'networkidle' }).catch(() => {});
@@ -313,8 +351,10 @@ check('hero ends on a thin grey line', heroInfo.heroLine === `1px solid ${TOKENS
 check('hero meets the header', Math.abs(heroInfo.heroTop - heroInfo.headerBottom) < 1, `${heroInfo.heroTop} vs ${heroInfo.headerBottom}`);
 check('root has no title row', !heroInfo.pageRow);
 if (hero) {
-  check('view buttons follow home.config.js', JSON.stringify(heroInfo.views) === JSON.stringify(hero.views.map(v => v.label)), heroInfo.views.join(' | '));
-  check('the first view opens', heroInfo.pressed === hero.views[0].label, heroInfo.pressed);
+  // One view has no buttons. More views have one button each.
+  const labels = hero.views.length > 1 ? hero.views.map(v => v.label) : [];
+  check('view buttons follow home.config.js', JSON.stringify(heroInfo.views) === JSON.stringify(labels), heroInfo.views.join(' | ') || 'none');
+  if (hero.views.length > 1) check('the first view opens', heroInfo.pressed === hero.views[0].label, heroInfo.pressed);
   check('legend of the first view shows', heroInfo.legend === hero.views[0].legend?.title, heroInfo.legend);
   check('imagery credits show', hero.imagery.every(i => !i.attribution || heroInfo.credit?.includes(i.attribution)), heroInfo.credit);
   // The view layers come from the PMTiles links of the catalog collections.
@@ -327,18 +367,46 @@ if (hero) {
     const layers = m.getStyle().layers.filter(l => l.source && l.source.startsWith('pmtiles-'));
     const visible = layers.filter(l => (l.layout || {}).visibility !== 'none').map(l => l.id);
     const features = visible.length ? m.queryRenderedFeatures({ layers: visible }) : [];
-    return { layers: layers.length, visible, rendered: features.length, pools: features.filter(f => f.properties.clase === 'pileta').length, pitch: m.getPitch() };
+    const gestures = ['scrollZoom', 'boxZoom', 'doubleClickZoom', 'dragRotate', 'keyboard', 'touchPitch', 'touchZoomRotate']
+      .filter(h => m[h]?.isEnabled());
+    return { layers: layers.length, visible, rendered: features.length, pitch: m.getPitch(), zoom: m.getZoom(), drag: m.dragPan.isEnabled(), gestures };
   })()`);
   const expectLayers = hero.views.reduce((n, v) => n + (v.layers || []).length, 0);
   check(`hero map adds ${expectLayers} catalog layers`, heroMap?.layers === expectLayers, `${heroMap?.layers} layers`);
   check('first view draws features', (heroMap?.rendered || 0) > 0, `${heroMap?.rendered} features, pitch ${heroMap?.pitch?.toFixed(0)}`);
-  check('first view draws no pools', heroMap?.pools === 0, `${heroMap?.pools} pools`);
-  await page.locator('.per-hero-views button', { hasText: hero.views[1].label }).click();
-  await page.waitForTimeout(2500);
-  const second = await page.evaluate(`(() => { const m = ${MAP_PROBE}; return m.getStyle().layers.filter(l => l.source && l.source.startsWith('pmtiles-') && (l.layout || {}).visibility !== 'none').map(l => l.id); })()`);
-  check(`"${hero.views[1].label}" shows only its own layers`, second.length === hero.views[1].layers.length && second.every(id => id.startsWith(hero.views[1].id)), second.join(', '));
+  // COG imagery draws inside the map style, under the data of every view.
+  if (hero.imagery.some(i => i.collection)) {
+    const order = await page.evaluate(`(() => { const m = ${MAP_PROBE}; return m.getLayersOrder(); })()`);
+    const group = order.indexOf('deck-layer-group-before:imagery-anchor');
+    const data = order.findIndex(id => id.startsWith(`${hero.views[0].id}-`));
+    check('hero imagery draws the catalog COG under the view layers', group !== -1 && group < data, `group at ${group}, first view layer at ${data}`);
+  }
+  // The map opens on the camera of the first view, with no animation, and
+  // only a drag moves it.
+  const camera = hero.views[0].camera || {};
+  check('hero opens on the camera of the first view', Math.abs((heroMap?.pitch ?? -1) - (camera.pitch ?? 0)) < 0.5 && Math.abs((heroMap?.zoom ?? -1) - camera.zoom) < 0.05, `zoom ${heroMap?.zoom?.toFixed(2)}, pitch ${heroMap?.pitch?.toFixed(0)}`);
+  check('hero map responds to a drag only', heroMap?.drag === true && heroMap.gestures.length === 0, `drag ${heroMap?.drag}, other gestures: ${heroMap?.gestures.join(', ') || 'none'}`);
+  console.log(`INFO  hero map: ${(pmtilesBytes / 1e6).toFixed(1)} MB of PMTiles and ${(imageryBytes / 1e6).toFixed(1)} MB of COG imagery received for the first view`);
+  if (hero.views.length > 1) {
+    await page.locator('.per-hero-views button', { hasText: hero.views[1].label }).click();
+    await page.waitForTimeout(2500);
+    const second = await page.evaluate(`(() => { const m = ${MAP_PROBE}; return m.getStyle().layers.filter(l => l.source && l.source.startsWith('pmtiles-') && (l.layout || {}).visibility !== 'none').map(l => l.id); })()`);
+    check(`"${hero.views[1].label}" shows only its own layers`, second.length === hero.views[1].layers.length && second.every(id => id.startsWith(hero.views[1].id)), second.join(', '));
+  }
 }
 await shoot('01-home', 'desktop');
+
+// A second visit reads the hero tiles from Cache Storage (src/utils/perTileCache.js).
+// Only the header of each archive comes from the network again.
+if (hero) {
+  pmtilesBytes = 0;
+  await open(route(''), 1000);
+  await page.waitForFunction(`(() => { const m = ${MAP_PROBE}; return m && m.getStyle().layers.some(l => l.source && l.source.startsWith('pmtiles-')) && m.areTilesLoaded(); })()`, null, { timeout: 45000 }).catch(() => {});
+  await page.waitForTimeout(2500);
+  const drawn = await page.evaluate(`(() => { const m = ${MAP_PROBE}; const ids = m.getStyle().layers.filter(l => l.source && l.source.startsWith('pmtiles-') && (l.layout || {}).visibility !== 'none').map(l => l.id); return ids.length ? m.queryRenderedFeatures({ layers: ids }).length : 0; })()`);
+  const archives = new Set(hero.views.flatMap(v => (v.layers || []).map(l => l.collection))).size;
+  check('a second visit reads the hero tiles from the cache', drawn > 0 && pmtilesBytes <= archives * 16384, `${pmtilesBytes} bytes from the network, ${drawn} features`);
+}
 
 if (catalog) {
   // ---------- 3. Home: counts, featured layers, category browser ----------
@@ -477,6 +545,19 @@ if (catalog) {
   await page.waitForTimeout(300);
   b = await band();
   check('ArrowRight opens the DuckDB tab and focuses it', b.panel === 'per-tab-duckdb' && b.focus === 'per-tab-duckdb' && b.code.includes(`FROM '${parquetUrl}'`), b.code.split('\n').join(' / '));
+  // The examples read the data file of a layer, never item metadata or the
+  // file of another publisher.
+  const dataFiles = new Set(catalog.collections.map(({ json, url }) => exampleParquet(json, url)).filter(Boolean));
+  check('the example reads the data file of a layer', dataFiles.has(parquetUrl), parquetUrl);
+  const noData = catalog.topics.find(t => t.children.every(child => !dataFiles.has(exampleParquet(catalog.collections.find(c => c.url === child)?.json || {}, child))));
+  if (noData) {
+    await page.locator('.per-chips button', { hasText: noData.title }).click();
+    await page.click('#per-tab-python');
+    await page.waitForTimeout(300);
+    b = await band();
+    const url = (b.code.match(/url = "([^"]+)"/) || [])[1];
+    check(`with "${noData.title}" chosen, the example still reads a layer data file`, dataFiles.has(url), url);
+  }
   check('root description column is hidden', !qgis.meta);
   check('stock catalog grid is hidden on the root', !qgis.stock);
 
@@ -526,21 +607,56 @@ if (catalog) {
         rendered: m && data.length ? m.queryRenderedFeatures({ layers: data.map(l => l.id) }).length : 0,
         footprint: layers.some(l => l.id.startsWith('stac-footprint')),
         legend: !!document.querySelector('.legend, .map-legend, [class*=legend] .swatch, [class*=legend] li'),
-        license: /CC-BY-SA-4\\.0/.test(text),
-        providers: [...document.querySelectorAll('.providers .provider-name, .providers .card-header, .providers summary, .providers button')].map(e => e.innerText.trim()).filter(Boolean),
-        viaLink: [...document.querySelectorAll('a')].some(a => /ide\\.pergamino\\.gob\\.ar/.test(a.href)),
-        download: [...document.querySelectorAll('a')].some(a => /\\.parquet($|\\?)/.test(a.href)),
+        text,
+        hrefs: [...document.querySelectorAll('a')].map(a => a.href),
         english: ['Data Preview', 'Filter rows', 'All columns', 'Original source', 'Human-readable documentation'].filter(s => text.includes(s)),
       };
     })()`);
     const tag = `${c.key} (${c.path})`;
+    const collectionUrl = new URL(c.path, CATALOG_URL).href;
+    const linksOf = rel => (json.links || []).filter(l => l.rel === rel).map(l => new URL(l.href, collectionUrl).href);
     check(`${tag}: page title is the collection title`, info.h1 === json.title, info.h1);
-    check(`${tag}: license shown`, info.license);
+    // An SPDX id shows as text. "other" shows as the license links.
+    const licenseLinks = linksOf('license');
+    const licenseShown = json.license && json.license !== 'other' ? info.text.includes(json.license) : licenseLinks.some(h => info.hrefs.includes(h));
+    check(`${tag}: license shown`, licenseShown, json.license);
     const producerNames = (json.providers || []).filter(p => (p.roles || []).includes('producer')).map(p => p.name);
     const providerText = await page.locator('.providers').innerText().catch(() => '');
     check(`${tag}: producer shown`, producerNames.every(n => providerText.includes(n)), producerNames.join(', '));
-    check(`${tag}: source link to the original service shown`, info.viaLink);
-    check(`${tag}: parquet download offered`, info.download);
+    const via = linksOf('via');
+    if (via.length) check(`${tag}: source link to the original service shown`, via.some(h => info.hrefs.includes(h)), via[0]);
+    const parquet = exampleParquet(json, collectionUrl);
+    if (parquet) check(`${tag}: parquet download offered`, info.hrefs.includes(parquet), parquet);
+    if (!json['geoparquet:geometry_type']) {
+      check(`${tag}: map renders`, info.map);
+    }
+    const style = await defaultStyle(json, collectionUrl);
+    // A COG draws inside the map style, under the catalog style, so that the
+    // style mask fades it outside the partido.
+    if (style?.layers?.length && Object.values(json.assets || {}).some(a => isCog(a) && (a.roles || []).includes('data'))) {
+      const order = await page.evaluate(`(() => { const m = ${MAP_PROBE}; return m ? m.getLayersOrder() : []; })()`);
+      const group = order.findIndex(id => id.startsWith('deck-layer-group'));
+      const first = order.indexOf(style.layers[0].id);
+      check(`${tag}: the COG draws under the style layer "${style.layers[0].id}"`, group !== -1 && first !== -1 && group < first, `${order[group]} at ${group}, ${style.layers[0].id} at ${first}`);
+    }
+    // Below the zoom where the data starts, the map offers to zoom in.
+    const minZoom = styleMinZoom(style);
+    const zoomNow = await page.evaluate(`(() => { const m = ${MAP_PROBE}; return m ? m.getZoom() : null; })()`);
+    if (typeof minZoom === 'number' && typeof zoomNow === 'number' && zoomNow < minZoom) {
+      const note = page.locator('.map-zoomincontrol');
+      const text = await note.innerText().catch(() => '');
+      check(`${tag}: the map says the data starts at zoom ${minZoom}`, text.includes(String(minZoom)), text || 'no note');
+      await note.click().catch(() => {});
+      await page.waitForTimeout(1500);
+      await page.waitForFunction(`(() => { const m = ${MAP_PROBE}; return m && m.areTilesLoaded(); })()`, null, { timeout: 45000 }).catch(() => {});
+      await page.waitForTimeout(1500);
+      const after = await page.evaluate(`(() => {
+        const m = ${MAP_PROBE};
+        const ids = m.getStyle().layers.filter(l => l.source && !/^(stac-footprint)/.test(l.id) && !/basemap|carto|openmaptiles|mascara|partido/.test(l.source + l.id)).map(l => l.id);
+        return { zoom: m.getZoom(), rendered: ids.length ? m.queryRenderedFeatures({ layers: ids }).length : 0, note: !!document.querySelector('.map-zoomincontrol') };
+      })()`);
+      check(`${tag}: the zoom note brings the data into view`, after.zoom >= minZoom && after.rendered > 0 && !after.note, `zoom ${after.zoom.toFixed(1)}, ${after.rendered} features`);
+    }
     if (json['geoparquet:geometry_type']) {
       check(`${tag}: map renders`, info.map);
       check(`${tag}: map minZoom ${MAP.minZoom}`, info.minZoom === MAP.minZoom, String(info.minZoom));
@@ -550,7 +666,7 @@ if (catalog) {
       console.log(`INFO  ${tag}: ${info.rendered} rendered features at the opening view, ${rows} rows`);
     }
     else {
-      console.log(`INFO  ${tag}: no geometry; map=${info.map} footprint=${info.footprint}`);
+      console.log(`INFO  ${tag}: no local GeoParquet; map=${info.map} footprint=${info.footprint}`);
     }
     if (info.english.length) console.log(`INFO  ${tag}: English strings: ${info.english.join(', ')}`);
     await noOverflow(`${c.key} desktop`);
@@ -619,7 +735,7 @@ for (const [name, path] of mobilePages) {
     if (layout.featured !== null) check('featured tiles stack on mobile', layout.featured === 1, `${layout.featured} columns`);
     if (homeConfig.hero) {
       check('the map sits under the hero text on mobile', layout.mapTop >= layout.copyBottom - 1, `${Math.round(layout.mapTop)} vs ${Math.round(layout.copyBottom)}`);
-      check('map credits sit under the map, clear of the view buttons', layout.creditTop >= layout.mapBottom - 1 && layout.viewsBottom < layout.mapBottom, `${Math.round(layout.creditTop)} vs ${Math.round(layout.mapBottom)}`);
+      check('map credits sit under the map, clear of the view buttons', layout.creditTop >= layout.mapBottom - 1 && (layout.viewsBottom ?? 0) < layout.mapBottom, `${Math.round(layout.creditTop)} vs ${Math.round(layout.mapBottom)}`);
     }
   }
   await shoot(name, 'mobile');

@@ -402,6 +402,12 @@ export default defineComponent({
     .maplibregl-ctrl-top-right {
       top: 150px;
     }
+
+    // The notes at the top of the map would sit under the header too.
+    .map-textcontrol,
+    .map-zoomincontrol {
+      top: 160px;
+    }
   }
 
   .meta {

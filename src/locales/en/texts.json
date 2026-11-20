@@ -233,6 +233,7 @@
     },
     "nobasemap": "No basemaps available.",
     "nodata": "No spatial information available in the metadata.",
+    "zoomIn": "The data starts at zoom {zoom}. Zoom in to see it.",
     "styles": {
       "legend": "Legend",
       "select": "Select map style"

@@ -149,6 +149,8 @@ import {
 
 // The tiles a category shows before the "Ver las N capas" button.
 const PAGE_SIZE = 8;
+// Catalog and collection files that load at the same time. Each is 1 to 10 KB.
+const LOAD_POOL = 12;
 
 // The home view of the root catalog: a map with a search field, the featured
 // layers, a browser over every layer by category and source, and a band with
@@ -197,8 +199,10 @@ export default defineComponent({
     sources() {
       return this.complete ? sourceOptions(this.entries) : [];
     },
+    // A layer shows here as soon as its collection loads. An unloaded layer
+    // has no keywords yet, so it cannot match.
     featured() {
-      return this.complete ? featuredEntries(this.entries, homeConfig.featuredKeyword, homeConfig.featuredLimit) : [];
+      return featuredEntries(this.entries, homeConfig.featuredKeyword, homeConfig.featuredLimit);
     },
     searching() {
       return this.query.trim().length > 0;
@@ -265,15 +269,19 @@ export default defineComponent({
     }
   },
   watch: {
-    // Counts, sources and thumbnails need every category and every layer.
-    // The background loader normally loads only what is visible, so queue
-    // every unloaded catalog and layer here. When a category loads, this
-    // watcher runs again with its layers.
+    // Counts, sources, featured layers and thumbnails need every category
+    // and every layer. Load each unloaded catalog and layer here, LOAD_POOL
+    // at a time. The app's background queue loads 3 every 200 ms, which
+    // takes about 13 s for this catalog. When a category loads, this watcher
+    // runs again with its layers.
     groups: {
       immediate: true,
       handler(groups) {
         if (!this.queued) {
-          this.queued = new Set(); // Immediate watchers run before created().
+          // Immediate watchers run before created().
+          this.queued = new Set();
+          this.pending = [];
+          this.inFlight = 0;
         }
         const urls = [
           ...groups.filter(g => g.key && !g.loaded).map(g => g.key),
@@ -282,9 +290,10 @@ export default defineComponent({
         for (const url of urls) {
           if (!this.queued.has(url)) {
             this.queued.add(url);
-            this.$store.commit('queue', url);
+            this.pending.push(url);
           }
         }
+        this.pump();
       }
     },
     visible() {
@@ -298,9 +307,24 @@ export default defineComponent({
     window.addEventListener('keydown', this.focusSearch);
   },
   beforeUnmount() {
+    this.pending = [];
     window.removeEventListener('keydown', this.focusSearch);
   },
   methods: {
+    // Starts loads until LOAD_POOL are in flight. Each finished load starts
+    // the next one.
+    pump() {
+      while (this.inFlight < LOAD_POOL && this.pending.length > 0) {
+        const url = this.pending.shift();
+        this.inFlight++;
+        this.$store.dispatch('load', { url, omitApi: true })
+          .catch(() => null)
+          .finally(() => {
+            this.inFlight--;
+            this.pump();
+          });
+      }
+    },
     groupTitle(group) {
       if (!group) {
         return '';

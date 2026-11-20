@@ -304,6 +304,9 @@ function rgbStretches(render) {
   });
 }
 
+// The error @developmentseed/geotiff throws for a tile without bytes.
+const SPARSE_TILE = /^Tile at \(\d+, \d+\) not found$/;
+
 // nodata may be a single value or an array (e.g. a display asset that should
 // drop both "empty" (0) and its physical no-data sentinel).
 function nodataSetOf(render) {
@@ -319,7 +322,17 @@ function nodataSetOf(render) {
 // they cannot disagree about the budget. `pool` is deck's decoder worker pool:
 // without it the codec runs on the main thread.
 async function readTile(image, x, y, { signal, pool }, bands) {
-  const tile = await image.fetchTile(x, y, { boundless: false, signal, pool });
+  let tile;
+  try {
+    tile = await image.fetchTile(x, y, { boundless: false, signal, pool });
+  }
+  catch (error) {
+    // A sparse COG (GDAL's SPARSE_OK) stores no bytes for an empty tile, and
+    // @developmentseed/geotiff reports that as "Tile at (x, y) not found".
+    // The tile has no data to draw.
+    if (SPARSE_TILE.test(error?.message || '')) {return null;}
+    throw error;
+  }
   // deck cancelled this tile while it was in flight. Null leaves it unloaded,
   // which is what Tile2DHeader expects after an abort.
   if (signal?.aborted) {return null;}

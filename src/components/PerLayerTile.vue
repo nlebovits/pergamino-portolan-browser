@@ -1,7 +1,10 @@
 <template>
   <StacLink :data="entry.link" :title="entry.title" class="per-tile" :class="{ large, loading: !entry.loaded }" hideIcon>
     <span class="per-tile-pic">
-      <img v-if="entry.thumbnail" :src="entry.thumbnail" alt="" loading="lazy" :crossorigin="crossOriginMedia">
+      <img
+        v-if="entry.thumbnail" :src="entry.thumbnail" alt="" :crossorigin="crossOriginMedia"
+        :loading="large ? 'eager' : 'lazy'" :fetchpriority="large ? 'high' : 'auto'"
+      >
     </span>
     <span class="per-tile-text">
       <span v-if="showCategory && entry.groupTitle" class="per-tile-category">{{ entry.groupTitle }}</span>

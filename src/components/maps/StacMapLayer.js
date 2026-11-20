@@ -148,6 +148,56 @@ function isCogAsset(asset) {
   return COG_MIME_TYPES.some(mt => type.includes(mt));
 }
 
+/**
+ * The props of a deck.gl COGLayer for one COG.
+ *
+ * @param {{id: string, url: string, render: ?Object, opacity?: number}} cog
+ *   `render` is a render extension object, or null for the layer's default.
+ * @param {function} DecoderPool From @developmentseed/geotiff.
+ * @param {function} GeoTIFF From @developmentseed/geotiff.
+ * @returns {Promise<Object>}
+ */
+export async function cogLayerProps({ id, url, render, opacity = 0.9 }, DecoderPool, GeoTIFF) {
+  const props = {
+    id,
+    // Opened here rather than handed to COGLayer as a URL, so tile reads go
+    // through a source that merges a tile with its adjacent mask tile into
+    // one range request. A URL would have COGLayer open it with the raw HTTP
+    // source, which costs two requests per masked tile. See utils/cogSource.
+    geotiff: await openCog(GeoTIFF, url),
+    // Off-main-thread codec decode via a first-party worker pool (see
+    // getDecoderPool). The CPU colormap loop in makeRenderTileLoader still runs
+    // on the main thread, so it stays bounded there (see renders.js).
+    pool: getDecoderPool(DecoderPool),
+    opacity,
+    // Keep the best-available coarser tiles visible until the finer level has
+    // decoded, rather than blanking the area while decode is in flight.
+    refinementStrategy: 'best-available',
+    // Bound tile-fetch concurrency per layer so a viewport change across
+    // several visible COGs doesn't flood the decoder pool.
+    maxRequests: 4,
+    // Bound cache by bytes, not tile count: a few large-tile COGs would blow a
+    // count-based budget. ~64 MB of decoded RGBA per layer.
+    maxCacheByteSize: 64 * 1024 * 1024,
+  };
+  if (render) {
+    const { getTileData, renderTile } = makeRenderTileLoader(render);
+    props.getTileData = getTileData;
+    props.renderTile = renderTile;
+  }
+  return props;
+}
+
+// The deck.gl backend for COGs, loaded on first use.
+export async function loadDeckDeps() {
+  const [{ MapboxOverlay }, { COGLayer }, { DecoderPool, GeoTIFF }] = await Promise.all([
+    import('@deck.gl/mapbox'),
+    import('@developmentseed/deck.gl-geotiff'),
+    import('@developmentseed/geotiff'),
+  ]);
+  return { MapboxOverlay, COGLayer, DecoderPool, GeoTIFF };
+}
+
 function cogKey(asset) {
   return asset.getKey?.() ?? asset.key;
 }
@@ -158,6 +208,10 @@ function cogKey(asset) {
 // cap keeps the picker readable rather than bounding memory. Dropped entries
 // are counted (see getCogOverflowCount).
 const COG_LAYER_CAP = 16;
+
+// @deck.gl/mapbox names the custom layers of an interleaved overlay
+// `deck-layer-group-before:<beforeId>` or `deck-layer-group-last`.
+const DECK_GROUP_PREFIX = 'deck-layer-group';
 
 // Normalize a PMTiles source URL for comparison. Strips the `pmtiles://`
 // prefix and resolves relative URLs to absolute so that a style source URL
@@ -252,6 +306,8 @@ export default class StacMapLayer {
     this.layerIds = [];
     this.sourceIds = [];
     this._cogList = [];
+    // COGLayer props -> the same props with their `beforeId` (see _anchoredProps).
+    this._anchoredPropsCache = new WeakMap();
     // COG assets the layer picker had to leave out (see COG_LAYER_CAP).
     this._cogOverflow = 0;
     // COG id -> a promise of its COGLayer props. The promise, not the resolved
@@ -1177,13 +1233,8 @@ export default class StacMapLayer {
   // Lazily load the deck.gl backend (overlay + COG layer + decoder pool). Split
   // out as an overridable seam so unit tests can inject a test double and
   // exercise the reconciliation below without WebGL.
-  async _loadDeckDeps() {
-    const [{ MapboxOverlay }, { COGLayer }, { DecoderPool, GeoTIFF }] = await Promise.all([
-      import('@deck.gl/mapbox'),
-      import('@developmentseed/deck.gl-geotiff'),
-      import('@developmentseed/geotiff'),
-    ]);
-    return { MapboxOverlay, COGLayer, DecoderPool, GeoTIFF };
+  _loadDeckDeps() {
+    return loadDeckDeps();
   }
 
   // Reconcile the deck.gl overlay with `_cogList`: one COGLayer per visible
@@ -1266,7 +1317,11 @@ export default class StacMapLayer {
       if (stale()) {return;}
       this._cogSyncFailed = failed;
 
-      const layers = built.filter(Boolean).map(entry => new COGLayer(entry.props));
+      // The overlay is interleaved: each COG draws inside the MapLibre style,
+      // before `beforeId`. A catalog style draws over the raster, so that its
+      // mask can fade the raster outside the area the catalog covers.
+      const beforeId = this._cogBeforeId();
+      const layers = built.filter(Boolean).map(entry => new COGLayer(this._anchoredProps(entry.props, beforeId)));
       // Every visible COG failed to open, so there is nothing to draw. Empty
       // the overlay rather than leave an earlier sync's rasters on the map,
       // which the picker would no longer list. The next sync rebuilds it.
@@ -1278,7 +1333,7 @@ export default class StacMapLayer {
       if (this._deckOverlay) {
         this._deckOverlay.setProps({ layers });
       } else {
-        this._deckOverlay = new MapboxOverlay({ interleaved: false, layers });
+        this._deckOverlay = new MapboxOverlay({ interleaved: true, layers });
         this.map.addControl(this._deckOverlay);
       }
     } catch (err) {
@@ -1286,37 +1341,10 @@ export default class StacMapLayer {
     }
   }
 
-  async _makeCogLayerProps(descriptor, DecoderPool, GeoTIFF) {
+  _makeCogLayerProps(descriptor, DecoderPool, GeoTIFF) {
     const { asset, render } = descriptor;
     const url = asset.getAbsoluteUrl?.() || asset.href;
-    const props = {
-      id: `stac-cog-${descriptor.id}`,
-      // Opened here rather than handed to COGLayer as a URL, so tile reads go
-      // through a source that merges a tile with its adjacent mask tile into
-      // one range request. A URL would have COGLayer open it with the raw HTTP
-      // source, which costs two requests per masked tile. See utils/cogSource.
-      geotiff: await openCog(GeoTIFF, url),
-      // Off-main-thread codec decode via a first-party worker pool (see
-      // getDecoderPool). The CPU colormap loop in makeRenderTileLoader still runs
-      // on the main thread, so it stays bounded there (see renders.js).
-      pool: getDecoderPool(DecoderPool),
-      opacity: 0.9,
-      // Keep the best-available coarser tiles visible until the finer level has
-      // decoded, rather than blanking the area while decode is in flight.
-      refinementStrategy: 'best-available',
-      // Bound tile-fetch concurrency per layer so a viewport change across
-      // several visible COGs doesn't flood the decoder pool.
-      maxRequests: 4,
-      // Bound cache by bytes, not tile count: a few large-tile COGs would blow a
-      // count-based budget. ~64 MB of decoded RGBA per layer.
-      maxCacheByteSize: 64 * 1024 * 1024,
-    };
-    if (render) {
-      const { getTileData, renderTile } = makeRenderTileLoader(render);
-      props.getTileData = getTileData;
-      props.renderTile = renderTile;
-    }
-    return props;
+    return cogLayerProps({ id: `stac-cog-${descriptor.id}`, url, render }, DecoderPool, GeoTIFF);
   }
 
   fit(padding = { top: 160, bottom: 50, left: 50, right: 50 }) {
@@ -1498,8 +1526,32 @@ export default class StacMapLayer {
   // that triggered the reorder would not be counted as ours.
   _ownLayerIds(extra = null) {
     const ids = new Set([...this.layerIds, ...this._overlayLayerIds, ...this._glStyleLayerIds]);
+    // The interleaved deck overlay draws the COGs from custom layers that it
+    // names itself. They are data too.
+    for (const id of this._layerOrder()) {
+      if (id.startsWith(DECK_GROUP_PREFIX)) {ids.add(id);}
+    }
     if (extra) {ids.add(extra);}
     return ids;
+  }
+
+  // The cached props of a COG with its `beforeId`. The object stays the same
+  // while the anchor stays the same, so a sync that changes nothing on this
+  // COG hands deck the props it already has.
+  _anchoredProps(props, beforeId) {
+    const cached = this._anchoredPropsCache.get(props);
+    if (cached && cached.beforeId === beforeId) {return cached;}
+    const anchored = { ...props, beforeId };
+    this._anchoredPropsCache.set(props, anchored);
+    return anchored;
+  }
+
+  // Where the COGs go in the layer order: under the first layer of the
+  // collection's style or vector data, else under the basemap labels.
+  _cogBeforeId() {
+    const data = new Set([...this._overlayLayerIds, ...this._glStyleLayerIds]);
+    const first = this._layerOrder().find(id => data.has(id));
+    return first || this._labelInsertionPoint();
   }
 
   // Draw order, cheaply. getLayersOrder avoids serialising the whole style,
@@ -1844,6 +1896,11 @@ export default class StacMapLayer {
     this._applyOverlayVisibility();
     this._activeGlStyle = glStyle;
     this._activeGlStyleBaseUrl = baseUrl;
+
+    // The style replaced the layers the COGs were anchored to.
+    if (this._cogList.some(d => d.visible)) {
+      this._syncCogLayers();
+    }
   }
 
 }

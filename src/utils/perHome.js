@@ -311,16 +311,26 @@ function isParquet(asset) {
   return !type && typeof asset?.href === 'string' && /\.parquet$/i.test(asset.href);
 }
 
+function rolesOf(asset) {
+  return Array.isArray(asset?.roles) ? asset.roles : [];
+}
+
 // The (Geo)Parquet file of a layer, for the Python and DuckDB examples.
-// Returns { url, spatial }, or null when the layer has no Parquet asset. A
-// layer is spatial when the collection names its primary geometry column
-// (table:primary_geometry).
+// Returns { url, spatial }, or null when the layer has no such file.
+//
+// The file is the Parquet asset with the `data` role, or a Parquet asset
+// without roles. Other roles describe other files: `collection-mirror` holds
+// the STAC items, `metadata` holds side tables, and `archive` holds old
+// versions. An asset with the `external` role stays out too. It is a file of
+// another publisher that covers more than this catalog, for example a whole
+// Overture part. A layer is spatial when the collection names its primary
+// geometry column (table:primary_geometry).
 export function parquetSource(stac) {
   if (!stac || typeof stac.getAssets !== 'function') {
     return null;
   }
-  const assets = stac.getAssets().filter(isParquet);
-  const asset = assets.find(a => Array.isArray(a.roles) && a.roles.includes('data')) || assets[0];
+  const assets = stac.getAssets().filter(a => isParquet(a) && !rolesOf(a).includes('external'));
+  const asset = assets.find(a => rolesOf(a).includes('data')) || assets.find(a => rolesOf(a).length === 0);
   const url = absoluteUrl(asset);
   if (!url) {
     return null;

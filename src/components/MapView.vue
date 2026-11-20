@@ -12,6 +12,7 @@
       <TextControl v-if="empty" :text="$t('mapping.nodata')" />
       <TextControl v-else-if="!hasBasemap" :text="$t('mapping.nobasemap')" />
       <TextControl v-else-if="vectorNoticeText" :text="vectorNoticeText" />
+      <ZoomInControl v-else-if="zoomInTo !== null" :minZoom="zoomInTo" @zoom="zoomToData" />
     </div>
     <div ref="target" class="popover-target" />
     <b-popover
@@ -38,8 +39,9 @@ import LayerControl from './maps/LayerControl.vue';
 import TextControl from './maps/TextControl.vue';
 import TerrainControl from './maps/TerrainControl.vue';
 import StylePicker from './maps/StylePicker.vue';
+import ZoomInControl from './maps/ZoomInControl.vue';
 import StacMapLayer from './maps/StacMapLayer.js';
-import { resolveStyles, loadStyleJson, extractLegend, extractStyleFields } from '../utils/portolanStyles.js';
+import { resolveStyles, loadStyleJson, extractLegend, extractStyleFields, dataMinZoom } from '../utils/portolanStyles.js';
 import { VECTOR_NOTICE_REPROJECTION, VECTOR_NOTICE_TOO_BIG, VECTOR_NOTICE_TOO_LARGE } from '../utils/parquetShared.js';
 import { createLonLatTransform } from '../utils/crs.js';
 import proj4 from 'proj4';
@@ -62,6 +64,7 @@ export default {
     TextControl,
     TerrainControl,
     StylePicker,
+    ZoomInControl,
   },
   mixins: [
     MapMixin
@@ -107,9 +110,17 @@ export default {
       // over a selection the user made while the assets were still loading.
       styleApplied: false,
       vectorNotice: null,
+      // The zoom of the map, and the lowest zoom at which the active style
+      // draws data (see dataMinZoom).
+      zoom: 0,
+      styleMinZoom: null,
     };
   },
   computed: {
+    // The zoom to offer while the map is below the data, else null.
+    zoomInTo() {
+      return typeof this.styleMinZoom === 'number' && this.zoom < this.styleMinZoom ? this.styleMinZoom : null;
+    },
     container() {
       if (this.isFullScreen) {
         return '#' + this.mapId;
@@ -190,6 +201,7 @@ export default {
         this.activeLegend = [];
         this.styleApplied = false;
         this.vectorNotice = null;
+        this.styleMinZoom = null;
         if (this.stacLayer) {
           this.stacLayer.remove();
           this.stacLayer = null;
@@ -250,11 +262,15 @@ export default {
       this.stacLayer.expectStyleFields();
       const stylesReady = this.loadStyles();
 
+      const layer = this.stacLayer;
       if (this.assets && this.assets.length > 0) {
-        await this.stacLayer.setAssets(this.assets);
+        await layer.setAssets(this.assets);
       } else {
-        await this.stacLayer.autoLoadVisualAssets(this.stac);
+        await layer.autoLoadVisualAssets(this.stac);
       }
+      // The page left, or showed another entity, while the assets loaded.
+      // beforeUnmount and showStacLayer then removed this layer.
+      if (layer !== this.stacLayer) {return;}
 
       // isEmpty() reads asset-backed state (_cogList, _overlayLayerIds), so
       // it must wait for the load above.
@@ -267,6 +283,7 @@ export default {
       }
 
       await stylesReady;
+      if (layer !== this.stacLayer) {return;}
       // The picker is live for the whole asset load, so by now the user may
       // already have chosen a style. Auto-applying the default here regardless
       // would snap their selection back and repaint the map — apply it only if
@@ -360,7 +377,9 @@ export default {
       try {
         this.stacLayer.applyGlStyle(styleEntry._cached, styleEntry.href);
         this.activeStyleIndex = index;
-        this.activeLegend = extractLegend(styleEntry._cached, this.currentZoom());
+        this.zoom = this.currentZoom();
+        this.activeLegend = extractLegend(styleEntry._cached, this.zoom);
+        this.styleMinZoom = dataMinZoom(styleEntry._cached);
         this.styleApplied = true;
       } catch (err) {
         console.warn('Failed to apply style:', styleEntry.name, err);
@@ -378,9 +397,15 @@ export default {
     // changes — MapLibre evaluates the zoom expressions itself, so the paint on
     // the map is already right and must not be re-bound here.
     refreshLegend() {
+      this.zoom = this.currentZoom();
       const styleEntry = this.availableStyles[this.activeStyleIndex];
       if (!styleEntry?._cached) {return;}
-      this.activeLegend = extractLegend(styleEntry._cached, this.currentZoom());
+      this.activeLegend = extractLegend(styleEntry._cached, this.zoom);
+    },
+
+    // Zooms in to where the data starts, at the centre of the view.
+    zoomToData(minZoom) {
+      this.map?.easeTo({ zoom: minZoom + 0.1 });
     },
 
     async onBasemapChanged() {

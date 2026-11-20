@@ -337,6 +337,30 @@ describe('perHome', () => {
       expect(parquetSource(stac).url).toBe(`${BASE}x/full.parquet`);
     });
 
+    it('accepts a Parquet asset without roles', () => {
+      const stac = layer({ table: { href: './t.parquet', type: 'application/vnd.apache.parquet' } });
+      expect(parquetSource(stac).url).toBe(`${BASE}x/t.parquet`);
+    });
+
+    // An Overture collection links one Overture part, which covers much more
+    // than the partido. The orthophotos link their STAC items as Parquet.
+    it('skips external data and Parquet files with other roles', () => {
+      const overture = layer({
+        data: {
+          href: 'https://overturemaps-us-west-2.s3.us-west-2.amazonaws.com/release/2026-10-21.0/theme=places/type=place/part-00004.zstd.parquet',
+          type: 'application/vnd.apache.parquet', roles: ['data', 'external']
+        },
+        visual: { href: 'https://example.org/places.pmtiles', type: 'application/vnd.pmtiles', roles: ['visual', 'external'] }
+      });
+      expect(parquetSource(overture)).toBeNull();
+      const orthophotos = layer({
+        items: { href: './items.parquet', type: 'application/vnd.apache.parquet', roles: ['collection-mirror'] },
+        escenas: { href: './escenas.parquet', type: 'application/vnd.apache.parquet', roles: ['metadata'] },
+        'version-2026-08-14': { href: './old.parquet', type: 'application/vnd.apache.parquet', roles: ['archive'] }
+      });
+      expect(parquetSource(orthophotos)).toBeNull();
+    });
+
     it('returns null for a raster layer or missing input', () => {
       const { pleiades } = makeCatalog();
       expect(parquetSource(pleiades)).toBeNull();

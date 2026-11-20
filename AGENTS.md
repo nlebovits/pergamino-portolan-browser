@@ -104,10 +104,10 @@ few conflicts.
 | `public/pergamino/` | The white and the dark municipal logo, and the favicons from pergamino.ar |
 | `src/components/PerHeader.vue` | The white header bar: logo, wordmark, the catalog statistics, and a GitHub link. Under it, the yellow demo strip and the thin gradient rule. It has no navigation, because the site is one page. It replaces the upstream `.site` row. |
 | `src/components/PerHome.vue` + `src/utils/perHome.js` | The home view: hero with search, featured layers, the category browser with the source filter, and the band with QGIS, Python and DuckDB tabs. The Python and DuckDB examples read the Parquet file of the first layer on view. |
-| `src/components/PerHeroMap.vue` | The 3D map of the hero. It draws the PMTiles link of each collection that `home.config.js` names. |
+| `src/components/PerHeroMap.vue` + `src/utils/perTileCache.js` | The map of the hero. It draws the ortho overview COG of `imagenes/ortofotos_10cm_2022` under the 3D buildings of `catastro/edificaciones_automaticas`. It has no animation, and only a drag moves it. `perTileCache.js` keeps its PMTiles reads in Cache Storage, so a second visit fetches only the archive header. |
 | `src/components/PerLayerTile.vue` | One layer tile, for the featured row and the category grid |
 | `src/components/PerFooter.vue` | The Municipalidad contact and the link columns. A link with an `icon` shows the brand mark of its social network. |
-| `tests/unit/perHome.spec.js` | Unit tests for the home accessors |
+| `tests/unit/perHome.spec.js`, `tests/unit/perTileCache.spec.js` | Unit tests for the home accessors and the tile cache |
 | `basemaps.config.js` | `MAP_CONSTRAINTS`, from the bbox of `limites/partido_pergamino` |
 | `verify-pergamino.mjs` | Browser checks at desktop and mobile size |
 | `.github/workflows/deploy-demo.yml` | Manual deploy only. A push to `main` does not publish. |
@@ -124,6 +124,16 @@ These upstream files carry small supporting edits:
   description column and the stock grid there, and names an all-collection
   grid "Capas".
 - `src/components/maps/MapMixin.js` spreads `MAP_CONSTRAINTS` into the map.
+- `src/components/maps/StacMapLayer.js` draws a COG inside the MapLibre style
+  (deck.gl interleaved), under the first style layer. A mask such as
+  `mascara` then covers it. It exports `cogLayerProps` and `loadDeckDeps` for
+  the hero.
+- `src/utils/renders.js` draws nothing for an empty tile of a sparse COG.
+- `src/utils/portolanStyles.js` exports `dataMinZoom`. `src/components/MapView.vue`
+  shows `src/components/maps/ZoomInControl.vue` when the map is below it, and
+  stops when the page changes while the assets load. `src/views/Item.vue`,
+  `src/views/Catalog.vue` and `src/theme/page.scss` place that note under the
+  header. `src/locales/en/texts.json` has its English text.
 
 ## Rules for this repository
 
@@ -160,7 +170,7 @@ paths in `VERIFY_FEATURE`. The script adds the keyword in its own browser only:
 
 ```bash
 CATALOG_URL=http://localhost:8081/catalog.json \
-  VERIFY_FEATURE=demografia/icv,catastro/edificaciones_pb \
+  VERIFY_FEATURE=demografia/icv,catastro/edificaciones_automaticas \
   node verify-pergamino.mjs
 ```
 
