@@ -13,51 +13,55 @@
 @import "bootstrap/scss/_functions";
 
 // ─────────────────────────────────────────────────────────
-// IDE PERGAMINO BRAND PALETTE
-// Sampled from https://geonode.pergamino.gob.ar/ with getComputedStyle.
-// "custom" is the inline <style> block "ESTILOS PERSONALIZADOS GEONODE 4.4".
-// "geonode.css" is /static/mapstore/dist/themes/geonode.css.
+// IDE PERGAMINO PALETTE
+// From the approved home design ("mock B", light variant, November 2026).
+// The yellow and the pink are the two colours of the municipal brand on
+// https://geonode.pergamino.gob.ar/. The design uses them as accents only.
 // Components reference these variables and never the literals.
 // ─────────────────────────────────────────────────────────
 
-// custom: #gn-brand-navbar and .msgapi footer, linear-gradient(to right, ...)
-$per-gradient-start: #fbcd49;
-$per-gradient-end:   #f07faf;
-$per-gradient:       linear-gradient(to right, $per-gradient-start, $per-gradient-end);
-// custom: :root --color-principal. Body text, links, buttons, the #gn-topbar strip.
-$per-ink:            #404040;
-// custom: .btn-primary:hover and #gn-topbar a:hover
-$per-ink-hover:      #5a5a5a;
-// custom: .gn-hero-description
-$per-ink-soft:       #4d4d4d;
-// geonode.css: --gn-main-border-color
-$per-border:         #ddd;
-// geonode.css: .gn-resource-card border and box-shadow
-$per-card-border:    rgba(0, 0, 0, 0.125);
-$per-card-shadow:    0 0.125rem 0.25rem rgba(0, 0, 0, 0.08);
-// custom: #gn-search-bar-apply background, border, and :hover background
-$per-search-bg:      #f5f5f5;
-$per-search-border:  #e0e0e0;
-$per-search-hover:   #ebebeb;
-// custom: .msgapi .gn-search-bar button box-shadow
-$per-search-shadow:  0 2px 4px rgba(0, 0, 0, 0.2);
-// geonode.css: .gn-footer color, var(--gn-footer-color) default. Also used for
-// the footer links: the sampled link blue (#397aab) gives only 1.8:1 to 3.1:1
-// on the gradient, under the WCAG AA minimum of 4.5:1.
-$per-footer-ink:     #000;
-// custom: :root --gn-button-danger-bg
+// Brand colours. Accents and focus rings only, never a large area.
+$per-sol:            #fbcd49;
+$per-rosa:           #f07faf;
+// The municipal yellow to pink gradient, as a thin rule under the header and
+// over the footer.
+$per-rule:           linear-gradient(90deg, $per-sol, $per-rosa);
+$per-rule-height:    3px;
+// Text: headings and body, secondary text, and quiet labels.
+$per-ink:            #231e26;
+$per-ink-soft:       #3d3741;
+$per-muted:          #6c6370;
+// Grounds: the page, the panels and cards on it, raised fields and badges.
+$per-night:          #f7f4f8;
+$per-paper:          #fff;
+$per-raise:          #efe9f1;
+$per-line:           #ddd4e0;
+// The area under a missing or loading thumbnail.
+$per-placeholder:    #f4f2f4;
+// Small accent text. Contrast on $per-paper: 5.9:1 and 6.8:1, over WCAG AA 4.5:1.
+$per-accent-ink:     #8a5a00;
+$per-category-ink:   #a52a63;
+// The header bar: a white bar with the dark municipal logo.
+$per-head-bg:        $per-paper;
+$per-head-fg:        $per-ink;
+$per-head-muted:     $per-muted;
+$per-head-hover:     $per-raise;
+// Solid buttons, pressed chips and pressed map views.
+$per-solid-bg:       $per-ink;
+$per-solid-fg:       #fff;
 $per-danger:         #a3131c;
-// custom: .btn-primary, .gn-resource-card, .gn-search-bar border-radius
-$per-radius:         5px;
-// custom: #gn-topbar a and .btn-primary font-weight; .card-title a font-weight
+
+$per-radius:         8px;
+$per-radius-large:   12px;
 $per-weight-label:   600;
 $per-weight-title:   700;
-
-// Heights of the two PerHeader strips. Chosen, not sampled. GeoNode sets
-// min-height: 3rem on both bars (custom: .msgapi .gn-menu); the brand bar is
-// taller here to fit the municipal logo at a legible size.
-$per-bar-height:     4rem;
-$per-band-height:    3rem;
+$per-weight-display: 800;
+// Chivo Mono sets numbers that a reader compares: counts, legend ends, steps.
+$per-font-mono:      "Chivo Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+$per-head-height:    3.75rem;
+// The layout spans the full window. The gutter is the space between the
+// window edge and the content. It grows from 20px on a phone to 56px.
+$per-gutter:         clamp(20px, 4vw, 56px);
 
 // ─────────────────────────────────────────────────────────
 // GENERAL — color-neutral settings that apply in both modes
@@ -89,12 +93,11 @@ $grid-breakpoints: (
 );
 
 // Font size
-$font-size-base: 0.95rem;
-// Fonts for normal text
-// GeoNode: [data-ms2-container] font-family var(--gn-font-family-base, "Montserrat", sans-serif)
-$font-family-sans-serif: "Montserrat", sans-serif;
+$font-size-base: 0.97rem;
+// Fonts for normal text. Chivo and Chivo Mono are by Omnibus-Type, Buenos Aires.
+$font-family-sans-serif: "Chivo", "Helvetica Neue", Arial, sans-serif;
 // Fonts for headings
-$headings-font-family: "Montserrat", sans-serif;
+$headings-font-family: "Chivo", "Helvetica Neue", Arial, sans-serif;
 // Fonts for code
 $font-family-monospace: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
@@ -107,8 +110,7 @@ $h3-font-size: 1.25rem;
 $h4-font-size: 1.1rem;
 
 // Link decoration (non-color)
-// Chosen, not sampled. GeoNode links share the body colour (#404040), so an
-// underline is the only cue that text is a link.
+// Links share the body colour, so an underline is the only cue that text is a link.
 $link-decoration: underline;
 $link-hover-decoration: underline;
 
@@ -120,12 +122,12 @@ $border-radius: $per-radius;
 // ─────────────────────────────────────────────────────────
 
 // Background and text default colors
-$body-bg: white;
+$body-bg: $per-night;
 $body-color: $per-ink;
 
 // Theme colors — the Portolan palette
 $primary:   $per-ink;
-$secondary: $per-ink-soft;
+$secondary: $per-muted;
 $success:   #2d8659;
 $info:      #3670a0;
 $warning:   #e5a100;
@@ -140,23 +142,20 @@ $subheadings-color: $secondary; // h2 only
 
 // Link colors
 $link-color: $primary;
-$link-hover-color: $per-ink-hover;
+$link-hover-color: $per-ink-soft;
 
 @import 'bootstrap/scss/_variables';
 
-// Main/top header of the website.
-// PerHeader draws the GeoNode gradient itself. $header is the gradient's
-// start colour, so colour-contrast() picks dark ink for text on it.
-$header: $per-gradient-start;
-$header-background: $per-gradient;
+// Main/top header of the website. PerHeader draws its own dark bar. These
+// values style the upstream header buttons, which PerHeader does not use.
+$header: $per-night;
+$header-background: $per-night;
 $header-position: sticky; // sticky or static
 $header-font-size: 1.5rem;
 $header-font-weight: 600;
 $header-text-shadow: none; // a drop shadow under dark-on-light text reads as blur
 
 $header-contrast: color-contrast($header);
-// Dark ink on a light bar. tint-color, upstream's default for a saturated
-// header, would render white on white here.
 $header-color: $body-color;
 $header-hover-color: $primary;
 

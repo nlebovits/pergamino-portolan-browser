@@ -316,6 +316,36 @@ const LEGEND_COLOR_PROPERTIES = { fill: 'fill-color', circle: 'circle-color' };
 const MIN_ZOOM = 0;
 const MAX_ZOOM = 24;
 
+// The source types a style carries with their own data. Every other source of
+// a Portolan style stands in for the collection's data (see applyGlStyle in
+// StacMapLayer).
+const SELF_CONTAINED_SOURCE_TYPES = ['raster', 'raster-dem', 'image', 'video'];
+
+function isDataSource(source) {
+  if (!source || typeof source !== 'object') {return false;}
+  if (source.type === 'geojson') {return !source.data;}
+  return !SELF_CONTAINED_SOURCE_TYPES.includes(source.type);
+}
+
+/**
+ * The lowest zoom at which the style draws the collection's data.
+ *
+ * Some archives hold data only from a zoom on. Overture places, for example,
+ * start at z14. The style says so with the `minzoom` of its data layers. Mask
+ * and outline layers on inline sources do not count.
+ *
+ * @param {Object} glStyle A MapLibre style document.
+ * @returns {?number} Null when the style draws no data source.
+ */
+export function dataMinZoom(glStyle) {
+  const sources = glStyle?.sources || {};
+  const layers = Array.isArray(glStyle?.layers) ? glStyle.layers : [];
+  const zooms = layers
+    .filter(layer => isDataSource(sources[layer.source]))
+    .map(layer => (typeof layer.minzoom === 'number' ? layer.minzoom : MIN_ZOOM));
+  return zooms.length > 0 ? Math.min(...zooms) : null;
+}
+
 function layerDrawnAt(layer, zoom) {
   const min = typeof layer.minzoom === 'number' ? layer.minzoom : MIN_ZOOM;
   const max = typeof layer.maxzoom === 'number' ? layer.maxzoom : MAX_ZOOM;

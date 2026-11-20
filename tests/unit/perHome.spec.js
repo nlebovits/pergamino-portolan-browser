@@ -1,19 +1,19 @@
 import { describe, it, expect } from 'vitest';
 import { Catalog, Collection } from 'stac-js';
 import {
-  catalogTotals, childKind, expandChildren, hasProducer, leadSentence, producers, sourceCounts, topicCards,
-  MIN_SOURCE_COLLECTIONS
+  allEntries, childKind, collectionUrl, featuredEntries, filterEntries, fold, homeGroups,
+  parquetSource, pmtilesSource, producers, querySnippets, sourceOf, sourceOptions, thumbnailOf
 } from '../../src/utils/perHome.js';
 
-// A miniature of the IDE Pergamino catalog: root -> topic sub-catalogs ->
+// A miniature of the IDE Pergamino catalog: root -> category sub-catalogs ->
 // collections, with ids that are POSIX paths like "catastro/parcela".
 const BASE = 'https://example.com/pergamino/';
 
-const collectionJson = (id, providers = []) => ({
-  type: 'Collection', id, stac_version: '1.1.0', description: id, title: id,
+const collectionJson = (id, { title = id, description = id, providers = [], keywords, assets = {}, links = [] } = {}) => ({
+  type: 'Collection', id, stac_version: '1.1.0', description, title,
   license: 'CC-BY-SA-4.0', extent: { spatial: { bbox: [[0, 0, 1, 1]] }, temporal: { interval: [[null, null]] } },
-  providers,
-  links: []
+  providers, assets, links,
+  ...(keywords ? { keywords } : {})
 });
 const catalogJson = (id, children, extra = {}) => ({
   type: 'Catalog', id, stac_version: '1.1.0', description: `${id} description`, ...extra,
@@ -21,12 +21,14 @@ const catalogJson = (id, children, extra = {}) => ({
 });
 const producer = name => ({ name, roles: ['producer', 'licensor'] });
 const host = { name: 'Source Cooperative', roles: ['host'] };
+const thumbnail = { thumbnail: { href: './thumbnail.png', type: 'image/png', roles: ['thumbnail'] } };
 
 function makeCatalog() {
   const root = new Catalog(
     catalogJson('root', [
       ['./catastro/catalog.json', 'Catastro'],
       ['./salud/catalog.json', 'Salud'],
+      ['./imagenes/catalog.json', 'Imágenes'],
       ['./suelta/collection.json', 'Capa suelta']
     ]),
     `${BASE}catalog.json`
@@ -35,25 +37,44 @@ function makeCatalog() {
     catalogJson('catastro', [
       ['./parcela/collection.json', 'Parcelas'],
       ['./manzana/collection.json', 'Manzanas'],
-      ['./chacra/collection.json', 'Chacras'],
-      ['./quinta/collection.json', 'Quintas'],
-      ['./zonas/collection.json', 'Zonas'],
       ['./historico/catalog.json', 'Histórico']
     ], { title: 'Catastro' }),
     `${BASE}catastro/catalog.json`
   );
+  // A raster category from another producer, to show that nothing assumes
+  // vector data or one source.
+  const imagenes = new Catalog(
+    catalogJson('imagenes', [['./pleiades/collection.json', 'Pleiades']], { title: 'Imágenes' }),
+    `${BASE}imagenes/catalog.json`
+  );
   const parcela = new Collection(
-    collectionJson('catastro/parcela', [producer('ARBA'), host]),
+    collectionJson('catastro/parcela', {
+      title: 'Parcelas', description: 'Parcelas urbanas y rurales del partido.',
+      providers: [host, producer('ARBA')], keywords: ['catastro', 'Destacado'], assets: thumbnail,
+      links: [{ rel: 'pmtiles', href: './parcela.pmtiles', type: 'application/vnd.pmtiles', 'pmtiles:layers': ['publico_parcela'] }]
+    }),
     `${BASE}catastro/parcela/collection.json`
   );
-  const suelta = new Collection(collectionJson('suelta'), `${BASE}suelta/collection.json`);
+  const pleiades = new Collection(
+    collectionJson('imagenes/pleiades', {
+      title: 'Imagen Pleiades Neo 2024', providers: [producer('CONAE')], keywords: ['destacado', 'satélite'],
+      assets: { cog: { href: './pleiades.tif', type: 'image/tiff; application=geotiff; profile=cloud-optimized', roles: ['data'] } }
+    }),
+    `${BASE}imagenes/pleiades/collection.json`
+  );
+  const suelta = new Collection(
+    collectionJson('suelta', { title: 'Educación', providers: [{ name: 'Municipalidad', roles: ['processor'] }] }),
+    `${BASE}suelta/collection.json`
+  );
   const database = {
     [`${BASE}catastro/catalog.json`]: catastro,
+    [`${BASE}imagenes/catalog.json`]: imagenes,
     [`${BASE}catastro/parcela/collection.json`]: parcela,
+    [`${BASE}imagenes/pleiades/collection.json`]: pleiades,
     [`${BASE}suelta/collection.json`]: suelta
   };
   const getStac = source => (typeof source === 'string' ? database[source] : null) ?? null;
-  return { root, children: root.getStacLinksWithRel('child'), getStac, database };
+  return { root, children: root.getStacLinksWithRel('child'), getStac, database, parcela, pleiades };
 }
 
 describe('perHome', () => {
@@ -62,7 +83,7 @@ describe('perHome', () => {
 
     it('uses the type of a loaded child', () => {
       expect(childKind(children[0], getStac)).toBe('catalog');
-      expect(childKind(children[2], getStac)).toBe('collection');
+      expect(childKind(children[3], getStac)).toBe('collection');
     });
 
     it('falls back to the file name for an unloaded child', () => {
@@ -72,88 +93,70 @@ describe('perHome', () => {
     });
   });
 
-  describe('topicCards', () => {
+  describe('homeGroups', () => {
     const { children, getStac } = makeCatalog();
-    const cards = topicCards(children, getStac);
+    const groups = homeGroups(children, getStac);
 
-    it('makes one card per catalog child, in catalog order', () => {
-      expect(cards.map(card => card.title)).toEqual(['Catastro', 'Salud']);
+    it('makes one group per catalog child, in catalog order, and puts root collections last', () => {
+      expect(groups.map(g => g.key)).toEqual([
+        `${BASE}catastro/catalog.json`, `${BASE}salud/catalog.json`, `${BASE}imagenes/catalog.json`, null
+      ]);
+      expect(groups.map(g => g.title)).toEqual(['Catastro', 'Salud', 'Imágenes', '']);
     });
 
-    it('skips a root child that is a collection', () => {
-      expect(cards.some(card => card.url.endsWith('suelta/collection.json'))).toBe(false);
+    it('lists the children of a loaded category, collections and nested catalogs alike', () => {
+      expect(groups[0].entries.map(e => e.url)).toEqual([
+        `${BASE}catastro/parcela/collection.json`,
+        `${BASE}catastro/manzana/collection.json`,
+        `${BASE}catastro/historico/catalog.json`
+      ]);
+      expect(groups[0].entries.map(e => e.isCatalog)).toEqual([false, false, true]);
     });
 
-    it('counts collections and nested catalogs apart', () => {
-      expect(cards[0].layers).toBe(5);
-      expect(cards[0].categories).toBe(1);
+    it('gives each entry an absolute link, so it resolves outside its category', () => {
+      expect(groups[0].entries[0].link.getAbsoluteUrl()).toBe(`${BASE}catastro/parcela/collection.json`);
     });
 
-    it('reads the topic description', () => {
-      expect(cards[0].description).toBe('catastro description');
+    it('reads a loaded layer from the catalog', () => {
+      expect(groups[0].entries[0]).toMatchObject({
+        loaded: true, title: 'Parcelas', source: 'ARBA', groupTitle: 'Catastro',
+        thumbnail: `${BASE}catastro/parcela/thumbnail.png`, keywords: ['catastro', 'Destacado']
+      });
     });
 
-    it('keeps an unloaded topic as a card with its link title and no counts', () => {
-      expect(cards[1]).toMatchObject({ title: 'Salud', loaded: false, layers: 0, categories: 0, description: '' });
+    it('keeps an unloaded layer with its link title', () => {
+      expect(groups[0].entries[1]).toMatchObject({ loaded: false, title: 'Manzanas', source: '', thumbnail: null, keywords: [] });
     });
 
-    it('follows a topic added to the catalog', () => {
+    it('keeps an unloaded category with no entries', () => {
+      expect(groups[1]).toMatchObject({ loaded: false, title: 'Salud', entries: [] });
+    });
+
+    it('takes a category of another kind of data from another source', () => {
+      expect(groups[2].entries[0]).toMatchObject({ title: 'Imagen Pleiades Neo 2024', source: 'CONAE', thumbnail: null });
+    });
+
+    it('follows a category added to the catalog', () => {
       const root = new Catalog(
         catalogJson('root', [['./catastro/catalog.json', 'Catastro'], ['./nuevo/catalog.json', 'Nuevo tema']]),
         `${BASE}catalog.json`
       );
-      const titles = topicCards(root.getStacLinksWithRel('child'), getStac).map(card => card.title);
-      expect(titles).toEqual(['Catastro', 'Nuevo tema']);
+      expect(homeGroups(root.getStacLinksWithRel('child'), getStac).map(g => g.title)).toEqual(['Catastro', 'Nuevo tema']);
     });
 
-    it('returns no cards for missing input', () => {
-      expect(topicCards(null, getStac)).toEqual([]);
-      expect(topicCards(children, null)).toEqual([]);
-      expect(topicCards([], getStac)).toEqual([]);
-    });
-  });
-
-  describe('catalogTotals', () => {
-    it('sums the collections and counts the topics', () => {
-      expect(catalogTotals([{ layers: 20, loaded: true }, { layers: 7, loaded: true }]))
-        .toEqual({ layers: 27, categories: 2, complete: true });
+    it('returns no groups for missing input', () => {
+      expect(homeGroups(null, getStac)).toEqual([]);
+      expect(homeGroups(children, null)).toEqual([]);
+      expect(homeGroups([], getStac)).toEqual([]);
     });
 
-    it('is incomplete while a topic loads', () => {
-      expect(catalogTotals([{ layers: 20, loaded: true }, { layers: 0, loaded: false }]).complete).toBe(false);
-    });
-
-    it('returns zeros for missing input', () => {
-      expect(catalogTotals(null)).toEqual({ layers: 0, categories: 0, complete: true });
-      expect(catalogTotals([])).toEqual({ layers: 0, categories: 0, complete: true });
+    it('flattens the groups in catalog order', () => {
+      expect(allEntries(groups).map(e => e.title)).toEqual(['Parcelas', 'Manzanas', 'Histórico', 'Imagen Pleiades Neo 2024', 'Educación']);
+      expect(allEntries(null)).toEqual([]);
     });
   });
 
-  describe('expandChildren', () => {
-    const { children, getStac } = makeCatalog();
-    const leaves = expandChildren(children, getStac);
-
-    it('replaces a loaded topic with its children', () => {
-      expect(leaves.filter(leaf => leaf.expanded).map(leaf => leaf.url)).toContain(`${BASE}catastro/parcela/collection.json`);
-    });
-
-    it('attaches the loaded STAC object to its leaf', () => {
-      const leaf = leaves.find(entry => entry.url === `${BASE}catastro/parcela/collection.json`);
-      expect(leaf.stac).toBeInstanceOf(Collection);
-    });
-
-    it('keeps an unloaded topic and a root collection as leaves', () => {
-      const direct = leaves.filter(leaf => !leaf.expanded).map(leaf => leaf.url);
-      expect(direct).toEqual([`${BASE}salud/catalog.json`, `${BASE}suelta/collection.json`]);
-    });
-
-    it('returns no leaves for missing input', () => {
-      expect(expandChildren(undefined, getStac)).toEqual([]);
-      expect(expandChildren(children, undefined)).toEqual([]);
-    });
-  });
-
-  describe('producers', () => {
+  describe('producers and sourceOf', () => {
     it('reads the providers with the producer role', () => {
       expect(producers({ providers: [producer('INTA'), host, { name: 'Municipalidad', roles: ['processor'] }] }))
         .toEqual(['INTA']);
@@ -167,63 +170,224 @@ describe('perHome', () => {
       expect(producers({})).toEqual([]);
       expect(producers(null)).toEqual([]);
       expect(producers({ providers: 'INTA' })).toEqual([]);
-      expect(producers({ providers: [{ name: 'X' }] })).toEqual([]);
     });
 
-    it('matches a producer by name', () => {
-      expect(hasProducer({ providers: [producer('ARBA')] }, 'ARBA')).toBe(true);
-      expect(hasProducer({ providers: [producer('ARBA')] }, 'INTA')).toBe(false);
-      expect(hasProducer({ providers: [producer('ARBA')] }, null)).toBe(false);
+    it('prefers a producer, then any named provider', () => {
+      expect(sourceOf({ providers: [host, producer('ARBA')] })).toBe('ARBA');
+      expect(sourceOf({ providers: [{ name: ' DSIG ', roles: ['processor'] }] })).toBe('DSIG');
+      expect(sourceOf({ providers: [{ roles: ['host'] }] })).toBe('');
+      expect(sourceOf(null)).toBe('');
     });
   });
 
-  describe('sourceCounts', () => {
-    const many = (name, count) => Array.from({ length: count }, () => ({ providers: [producer(name)] }));
+  describe('thumbnailOf', () => {
+    it('returns the absolute URL of a thumbnail asset', () => {
+      const { parcela } = makeCatalog();
+      expect(thumbnailOf(parcela)).toBe(`${BASE}catastro/parcela/thumbnail.png`);
+    });
 
-    it('lists the producers at or above the minimum, most collections first', () => {
-      const collections = [...many('INTA', 11), ...many('ARBA', 11), ...many('INDEC', 7), ...many('IGN', 1)];
-      expect(sourceCounts(collections)).toEqual([
-        { name: 'ARBA', count: 11 },
-        { name: 'INTA', count: 11 },
-        { name: 'INDEC', count: 7 }
+    it('returns null without a thumbnail', () => {
+      const { pleiades } = makeCatalog();
+      expect(thumbnailOf(pleiades)).toBeNull();
+      expect(thumbnailOf(null)).toBeNull();
+    });
+  });
+
+  describe('featuredEntries', () => {
+    const { children, getStac } = makeCatalog();
+    const entries = allEntries(homeGroups(children, getStac));
+
+    it('keeps the layers with the keyword in catalog order, ignoring case', () => {
+      expect(featuredEntries(entries, 'destacado').map(e => e.title)).toEqual(['Parcelas', 'Imagen Pleiades Neo 2024']);
+      expect(featuredEntries(entries, ' DESTACADO ').length).toBe(2);
+    });
+
+    it('stops at the limit', () => {
+      expect(featuredEntries(entries, 'destacado', 1).map(e => e.title)).toEqual(['Parcelas']);
+    });
+
+    it('features nothing without a keyword or a match', () => {
+      expect(featuredEntries(entries, null)).toEqual([]);
+      expect(featuredEntries(entries, '')).toEqual([]);
+      expect(featuredEntries(entries, 'portada')).toEqual([]);
+      expect(featuredEntries(null, 'destacado')).toEqual([]);
+    });
+  });
+
+  describe('sourceOptions', () => {
+    const named = (...sources) => sources.map(source => ({ source }));
+
+    it('counts the layers of each source, most layers first, then by name', () => {
+      expect(sourceOptions(named('INTA', 'ARBA', 'INTA', 'CONAE', 'ARBA', ''))).toEqual([
+        { name: 'ARBA', count: 2 }, { name: 'INTA', count: 2 }, { name: 'CONAE', count: 1 }
       ]);
     });
 
-    it('uses the default minimum', () => {
-      expect(sourceCounts(many('X', MIN_SOURCE_COLLECTIONS - 1))).toEqual([]);
-      expect(sourceCounts(many('X', MIN_SOURCE_COLLECTIONS))).toEqual([{ name: 'X', count: MIN_SOURCE_COLLECTIONS }]);
-    });
-
-    it('lists a new producer once it reaches the minimum', () => {
-      expect(sourceCounts(many('Nuevo', 2), 2)).toEqual([{ name: 'Nuevo', count: 2 }]);
-    });
-
     it('returns nothing for missing input', () => {
-      expect(sourceCounts(null)).toEqual([]);
-      expect(sourceCounts([null, {}, { providers: [] }])).toEqual([]);
+      expect(sourceOptions(null)).toEqual([]);
+      expect(sourceOptions(named(''))).toEqual([]);
     });
   });
 
-  describe('leadSentence', () => {
-    it('returns the first sentence', () => {
-      expect(leadSentence('Espejo cloud-native de la IDE. Los datos son publicados por la DSIG.'))
-        .toBe('Espejo cloud-native de la IDE.');
+  describe('filterEntries', () => {
+    const { children, getStac } = makeCatalog();
+    const entries = allEntries(homeGroups(children, getStac));
+    const titles = list => list.map(e => e.title);
+
+    it('returns every layer without a filter', () => {
+      expect(filterEntries(entries)).toHaveLength(entries.length);
     });
 
-    it('removes Markdown links and emphasis', () => {
-      expect(leadSentence('Datos de [la DSIG](https://example.com) en **GeoParquet**. Resto.'))
-        .toBe('Datos de la DSIG en GeoParquet.');
+    it('filters by source', () => {
+      expect(titles(filterEntries(entries, { source: 'CONAE' }))).toEqual(['Imagen Pleiades Neo 2024']);
     });
 
-    it('cuts a long sentence at a word', () => {
-      const out = leadSentence('palabra '.repeat(60), 40);
-      expect(out.length).toBeLessThanOrEqual(41);
-      expect(out.endsWith('…')).toBe(true);
+    it('matches every word of the query, ignoring case and accents', () => {
+      expect(titles(filterEntries(entries, { query: 'educacion' }))).toEqual(['Educación']);
+      expect(titles(filterEntries(entries, { query: 'SATELITE pleiades' }))).toEqual(['Imagen Pleiades Neo 2024']);
+      expect(titles(filterEntries(entries, { query: 'pleiades parcelas' }))).toEqual([]);
     });
 
-    it('returns an empty string without a description', () => {
-      expect(leadSentence(undefined)).toBe('');
-      expect(leadSentence('   ')).toBe('');
+    it('searches the description, the source and the category', () => {
+      expect(titles(filterEntries(entries, { query: 'rurales' }))).toEqual(['Parcelas']);
+      expect(titles(filterEntries(entries, { query: 'arba' }))).toEqual(['Parcelas']);
+      expect(titles(filterEntries(entries, { query: 'imagenes' }))).toEqual(['Imagen Pleiades Neo 2024']);
+    });
+
+    it('combines the source and the query', () => {
+      expect(filterEntries(entries, { source: 'ARBA', query: 'pleiades' })).toEqual([]);
+    });
+
+    it('returns nothing for missing input', () => {
+      expect(filterEntries(null, { query: 'x' })).toEqual([]);
+    });
+
+    it('folds accents and case', () => {
+      expect(fold('Educación ÁREA')).toBe('educacion area');
+      expect(fold(null)).toBe('');
+    });
+  });
+
+  describe('collectionUrl', () => {
+    it('resolves a collection path against the root catalog', () => {
+      expect(collectionUrl(`${BASE}catalog.json`, 'catastro/parcela')).toBe(`${BASE}catastro/parcela/collection.json`);
+      expect(collectionUrl(`${BASE}catalog.json`, './catastro/parcela/')).toBe(`${BASE}catastro/parcela/collection.json`);
+    });
+
+    it('keeps a path that names a JSON file', () => {
+      expect(collectionUrl(`${BASE}catalog.json`, 'imagenes/catalog.json')).toBe(`${BASE}imagenes/catalog.json`);
+    });
+
+    it('returns null for missing input', () => {
+      expect(collectionUrl(null, 'x')).toBeNull();
+      expect(collectionUrl(`${BASE}catalog.json`, '')).toBeNull();
+      expect(collectionUrl('not a url', 'x')).toBeNull();
+    });
+  });
+
+  describe('pmtilesSource', () => {
+    it('reads the archive and its first layer from the pmtiles link', () => {
+      const { parcela } = makeCatalog();
+      expect(pmtilesSource(parcela)).toEqual({ url: `${BASE}catastro/parcela/parcela.pmtiles`, layer: 'publico_parcela' });
+    });
+
+    it('reads a PMTiles asset', () => {
+      const stac = new Collection(
+        collectionJson('x', { assets: { tiles: { href: './x.pmtiles', type: 'application/vnd.pmtiles', 'pmtiles:layers': ['x'] } } }),
+        `${BASE}x/collection.json`
+      );
+      expect(pmtilesSource(stac)).toEqual({ url: `${BASE}x/x.pmtiles`, layer: 'x' });
+    });
+
+    it('returns null without an archive or a layer name', () => {
+      const { pleiades } = makeCatalog();
+      expect(pmtilesSource(pleiades)).toBeNull();
+      const unnamed = new Collection(
+        collectionJson('y', { links: [{ rel: 'pmtiles', href: './y.pmtiles' }] }),
+        `${BASE}y/collection.json`
+      );
+      expect(pmtilesSource(unnamed)).toBeNull();
+      expect(pmtilesSource(null)).toBeNull();
+    });
+  });
+  describe('parquetSource', () => {
+    const layer = (assets, extra = {}) => new Collection(
+      { ...collectionJson('x', { assets }), ...extra },
+      `${BASE}x/collection.json`
+    );
+
+    it('reads the GeoParquet data asset of a spatial layer', () => {
+      const stac = layer({
+        tiles: { href: './x.pmtiles', type: 'application/vnd.pmtiles', roles: ['data'] },
+        data: { href: './x.parquet', type: 'application/vnd.apache.parquet', roles: ['data'] }
+      }, { 'table:primary_geometry': 'geometry' });
+      expect(parquetSource(stac)).toEqual({ url: `${BASE}x/x.parquet`, spatial: true });
+    });
+
+    it('marks a table without a primary geometry as not spatial', () => {
+      const stac = layer({ data: { href: './t.parquet', type: 'application/vnd.apache.parquet', roles: ['data'] } });
+      expect(parquetSource(stac)).toEqual({ url: `${BASE}x/t.parquet`, spatial: false });
+    });
+
+    it('prefers the data role and accepts a media type parameter or a bare .parquet href', () => {
+      const stac = layer({
+        sample: { href: './sample.parquet', type: 'application/vnd.apache.parquet; profile=sample', roles: ['metadata'] },
+        data: { href: './full.parquet', roles: ['data'] }
+      });
+      expect(parquetSource(stac).url).toBe(`${BASE}x/full.parquet`);
+    });
+
+    it('accepts a Parquet asset without roles', () => {
+      const stac = layer({ table: { href: './t.parquet', type: 'application/vnd.apache.parquet' } });
+      expect(parquetSource(stac).url).toBe(`${BASE}x/t.parquet`);
+    });
+
+    // An Overture collection links one Overture part, which covers much more
+    // than the partido. The orthophotos link their STAC items as Parquet.
+    it('skips external data and Parquet files with other roles', () => {
+      const overture = layer({
+        data: {
+          href: 'https://overturemaps-us-west-2.s3.us-west-2.amazonaws.com/release/2026-10-21.0/theme=places/type=place/part-00004.zstd.parquet',
+          type: 'application/vnd.apache.parquet', roles: ['data', 'external']
+        },
+        visual: { href: 'https://example.org/places.pmtiles', type: 'application/vnd.pmtiles', roles: ['visual', 'external'] }
+      });
+      expect(parquetSource(overture)).toBeNull();
+      const orthophotos = layer({
+        items: { href: './items.parquet', type: 'application/vnd.apache.parquet', roles: ['collection-mirror'] },
+        escenas: { href: './escenas.parquet', type: 'application/vnd.apache.parquet', roles: ['metadata'] },
+        'version-2026-08-14': { href: './old.parquet', type: 'application/vnd.apache.parquet', roles: ['archive'] }
+      });
+      expect(parquetSource(orthophotos)).toBeNull();
+    });
+
+    it('returns null for a raster layer or missing input', () => {
+      const { pleiades } = makeCatalog();
+      expect(parquetSource(pleiades)).toBeNull();
+      expect(parquetSource(null)).toBeNull();
+    });
+  });
+
+  describe('querySnippets', () => {
+    const url = 'https://example.com/x.parquet';
+
+    it('uses GeoPandas and the spatial extension for a spatial layer', () => {
+      const { python, duckdb } = querySnippets({ url, spatial: true });
+      expect(python).toContain('import geopandas as gpd');
+      expect(python).toContain(`url = "${url}"`);
+      expect(python).toContain('gpd.read_parquet(url)');
+      expect(duckdb).toBe(`INSTALL spatial;\nLOAD spatial;\n\nSELECT *\nFROM '${url}'\nLIMIT 10;`);
+    });
+
+    it('uses pandas and plain SQL for a table', () => {
+      const { python, duckdb } = querySnippets({ url, spatial: false });
+      expect(python).toContain('pd.read_parquet(url)');
+      expect(python).not.toContain('geopandas');
+      expect(duckdb).toBe(`SELECT *\nFROM '${url}'\nLIMIT 10;`);
+    });
+
+    it('returns null without a file', () => {
+      expect(querySnippets(null)).toBeNull();
     });
   });
 });

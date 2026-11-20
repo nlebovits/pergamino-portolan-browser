@@ -584,6 +584,16 @@ describe('tile loader plumbing', () => {
     expect(await makeRenderTileLoader({ bidx: [1] }).getTileData(image, opts)).toBeNull()
   })
 
+  // GDAL writes no bytes for an empty tile of a sparse COG.
+  it('returns null for a sparse tile, and still throws other read errors', async () => {
+    const sparse = { fetchTile: async () => { throw new Error('Tile at (9, 8) not found') } }
+    const opts = { x: 9, y: 8, signal: undefined }
+    expect(await makeRenderTileLoader({ bidx: [1, 2, 3] }).getTileData(sparse, opts)).toBeNull()
+    expect(await makeRenderTileLoader({ bidx: [1] }).getTileData(sparse, opts)).toBeNull()
+    const broken = { fetchTile: async () => { throw new Error('Bad response code: 500') } }
+    await expect(makeRenderTileLoader({ bidx: [1, 2, 3] }).getTileData(broken, opts)).rejects.toThrow('500')
+  })
+
   it('draws nothing for a single-band bidx the tile does not have', async () => {
     const render = { colormap_name: 'viridis', rescale: [[0, 1]], bidx: [3] }
     expect(await call(render, fakeImage(new Float32Array([0.5]), 1, 1))).toBeNull()

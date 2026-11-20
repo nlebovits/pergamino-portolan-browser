@@ -127,6 +127,12 @@ export default defineComponent({
       top: 150px;
     }
 
+    // The notes at the top of the map would sit under the header too.
+    .map-textcontrol,
+    .map-zoomincontrol {
+      top: 160px;
+    }
+
     // The hero map is pulled up underneath the site header (z-index 10),
     // which would otherwise cover the map/thumbnails tab pills and block
     // clicks on them. Push the pills below the header, mirroring the

@@ -94,36 +94,62 @@ few conflicts.
 
 | File | Owns |
 | --- | --- |
-| `config.js` | Catalog URL, title, `es` as the only locale, footer links |
+| `config.js` | Catalog URL, title, `es` as the only locale. `footerLinks` is `null`, because `PerFooter` draws the footer. |
+| `home.config.js` | The featured keyword, the official site that the demo notice links, the GitHub URL of this browser, the QGIS plugin URL, the hero map (imagery, views, layer styles, legends, credits), and the footer content |
+| `widgets.config.js` | Mounts `PerFooter` at the upstream `footer-start` hook |
 | `src/locales/es/custom.json` | "Capa", "Categoría" and "Archivo" in place of the STAC nouns, the 39 keys missing from upstream `es`, and the `pergamino.*` strings |
-| `src/theme/variables.scss` | The `$per-*` palette and Montserrat, each value with its GeoNode source |
-| `src/theme/custom.scss` | Component styles that use those variables |
-| `index.html` | `lang="es"`, favicons, the Montserrat link, meta tags |
-| `public/pergamino/` | The white municipal logo and the favicons from pergamino.ar |
-| `src/components/PerHeader.vue` | The gradient brand bar and the `#404040` action band. It replaces the upstream `.site` row and passes every prop and event through. |
-| `src/components/PerHome.vue` + `src/utils/perHome.js` | The home view: the topic grid with counts and the "Por fuente" chips |
-| `tests/unit/perHome.spec.js` | Unit tests for the home accessors |
+| `src/theme/variables.scss` | The `$per-*` palette from the approved home design, and Chivo with Chivo Mono |
+| `src/theme/custom.scss` | Page-wide styles that use those variables: headings, cards, buttons, the footer rule |
+| `index.html` | `lang="es"`, favicons, the Chivo link, meta tags |
+| `public/pergamino/` | The white and the dark municipal logo, and the favicons from pergamino.ar |
+| `src/components/PerHeader.vue` | The white header bar: logo, wordmark, the catalog statistics, and a GitHub link. Under it, the yellow demo strip and the thin gradient rule. It has no navigation, because the site is one page. It replaces the upstream `.site` row. |
+| `src/components/PerHome.vue` + `src/utils/perHome.js` | The home view: hero with search, featured layers, the category browser with the source filter, and the band with QGIS, Python and DuckDB tabs. The Python and DuckDB examples read the Parquet file of the first layer on view. |
+| `src/components/PerHeroMap.vue` + `src/utils/perTileCache.js` | The map of the hero. It draws the ortho overview COG of `imagenes/ortofotos_10cm_2022` under the 3D buildings of `catastro/edificaciones_automaticas`. It has no animation, and only a drag moves it. `perTileCache.js` keeps its PMTiles reads in Cache Storage, so a second visit fetches only the archive header. |
+| `src/components/PerLayerTile.vue` | One layer tile, for the featured row and the category grid |
+| `src/components/PerFooter.vue` | The Municipalidad contact and the link columns. A link with an `icon` shows the brand mark of its social network. |
+| `tests/unit/perHome.spec.js`, `tests/unit/perTileCache.spec.js` | Unit tests for the home accessors and the tile cache |
 | `basemaps.config.js` | `MAP_CONSTRAINTS`, from the bbox of `limites/partido_pergamino` |
 | `verify-pergamino.mjs` | Browser checks at desktop and mobile size |
 | `.github/workflows/deploy-demo.yml` | Manual deploy only. A push to `main` does not publish. |
 
 Brand values have one home, the `$per-*` variables in `variables.scss`. Do not
-put a hex literal in a component.
+put a hex literal in a component. Map colours are data styles, so they live
+with the layers in `home.config.js`.
 
 These upstream files carry small supporting edits:
 
-- `src/StacBrowser.vue` mounts `PerHeader` in place of the `.site` row.
+- `src/StacBrowser.vue` mounts `PerHeader` in place of the `.site` row, and
+  hides the title row on the root.
 - `src/views/Catalog.vue` mounts `PerHome` on the root, hides the root
-  description column, filters the grid by `?.fuente=`, and names an
-  all-collection grid "Capas".
+  description column and the stock grid there, and names an all-collection
+  grid "Capas".
 - `src/components/maps/MapMixin.js` spreads `MAP_CONSTRAINTS` into the map.
+- `src/components/maps/StacMapLayer.js` draws a COG inside the MapLibre style
+  (deck.gl interleaved), under the first style layer. A mask such as
+  `mascara` then covers it. It exports `cogLayerProps` and `loadDeckDeps` for
+  the hero.
+- `src/utils/renders.js` draws nothing for an empty tile of a sparse COG.
+- `src/utils/portolanStyles.js` exports `dataMinZoom`. `src/components/MapView.vue`
+  shows `src/components/maps/ZoomInControl.vue` when the map is below it, and
+  stops when the page changes while the assets load. `src/views/Item.vue`,
+  `src/views/Catalog.vue` and `src/theme/page.scss` place that note under the
+  header. `src/locales/en/texts.json` has its English text.
 
 ## Rules for this repository
 
 - Never edit the catalog from here. Report a catalog defect in
   pergamino-ide-catalog.
-- Never key browser behavior to a collection id. The home view reads topics,
-  counts and producers from the catalog at run time.
+- Never key browser behavior to a collection id. The home view reads
+  categories, layers, sources, thumbnails and featured layers from the catalog
+  at run time. The one exception is the hero map: `home.config.js` names the
+  collections it draws. When one of them is missing, its view shows the
+  imagery only.
+- Featured layers carry the keyword in `home.config.js` (`destacado`) in their
+  catalog `keywords`. Tag them in pergamino-ide-catalog.
+- The design is light only, with no theme toggle. The yellow to pink gradient
+  appears only as the thin rule under the header and over the footer. Use
+  text labels, not icon sets. The exceptions are brand marks: the GitHub link
+  in the header and the social networks in the footer.
 - Report a defect that every portolan-browser deployment has upstream. Do not
   patch it here unless a person approves the patch.
 
@@ -136,6 +162,15 @@ SB_catalogUrl=http://localhost:8081/catalog.json \
 pnpm run lint
 pnpm run test:unit
 CATALOG_URL=http://localhost:8081/catalog.json \
+  node verify-pergamino.mjs
+```
+
+To test the featured section before the catalog tags a layer, name collection
+paths in `VERIFY_FEATURE`. The script adds the keyword in its own browser only:
+
+```bash
+CATALOG_URL=http://localhost:8081/catalog.json \
+  VERIFY_FEATURE=demografia/icv,catastro/edificaciones_automaticas \
   node verify-pergamino.mjs
 ```
 

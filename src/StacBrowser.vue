@@ -10,17 +10,16 @@
       <PerHeader
         ref="headerTitle"
         :root="root"
-        :canSearch="canSearch" :isSearchPage="isSearchPage" :searchLink="searchBrowserLink"
-        :isServerSelector="isServerSelector" :menuOpen="!!sidebar"
         :showRootStats="!!root" :serviceType="serviceType"
         :canAuthenticate="canAuthenticate" :authIcon="authIcon" :authLabel="authLabel" :authTitle="authTitle"
         :data="data" :currentLocale="localeFromVueX" :locales="supportedLocalesFromVueX"
         :showColorToggle="!enforcedColorModeFromVueX || enforcedColorModeFromVueX === 'auto'" :colorMode="colorMode"
-        @toggle-sidebar="sidebar = !sidebar" @log-in-out="logInOut"
+        @log-in-out="logInOut"
         @set-locale="locale => switchLocale({locale, userSelected: true})"
         @toggle-color-mode="toggleColorMode"
       />
-      <b-row class="page" v-if="!loading">
+      <!-- IDE Pergamino: the home view (PerHome) carries its own heading. -->
+      <b-row class="page" v-if="!loading && !isRoot">
         <b-col md="12">
           <div class="title">
             <img v-if="icon && !isRoot" :src="icon.getAbsoluteUrl()" :alt="icon.title" :title="icon.title" class="icon">
@@ -155,7 +154,7 @@ export default defineComponent({
       enforcedColorModeFromVueX: 'enforcedColorMode',
       colorModeFromVueX: 'colorMode'
     }),
-    ...mapGetters(['canSearch', 'collectionLink', 'fromBrowserPath', 'isExternalUrl', 'isRoot', 'parentLink', 'root', 'searchBrowserLink', 'supportsConformance', 'title', 'toBrowserPath']),
+    ...mapGetters(['collectionLink', 'fromBrowserPath', 'isExternalUrl', 'isRoot', 'parentLink', 'root', 'supportsConformance', 'title', 'toBrowserPath']),
     ...mapGetters('auth', { authMethod: 'method' }),
     ...mapGetters('auth', ['canAuthenticate', 'isLoggedIn', 'showLogin']),
     browserVersion() {

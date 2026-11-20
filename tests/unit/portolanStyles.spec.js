@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import Collection from 'stac-js/src/collection.js'
-import { resolveStyles, extractLegend, extractStyleFields, loadStyleJson } from '../../src/utils/portolanStyles.js'
+import { resolveStyles, extractLegend, extractStyleFields, loadStyleJson, dataMinZoom } from '../../src/utils/portolanStyles.js'
 
 const COLLECTION_URL = 'https://example.com/boundaries/nl/collection.json'
 
@@ -736,5 +736,44 @@ describe('portolanStyles', () => {
       await expect(loadStyleJson('https://example.com/old.json'))
         .rejects.toThrow('Invalid Mapbox GL style (version !== 8)')
     })
+  })
+})
+
+describe('dataMinZoom', () => {
+  const mask = { type: 'geojson', data: { type: 'Polygon', coordinates: [] } }
+
+  it('reads the lowest minzoom of the data layers', () => {
+    const style = {
+      sources: { data: { type: 'vector', url: 'pmtiles://https://example.org/places.pmtiles' }, mascara: mask },
+      layers: [
+        { id: 'place-point', type: 'circle', source: 'data', 'source-layer': 'place', minzoom: 14 },
+        { id: 'place-label', type: 'symbol', source: 'data', 'source-layer': 'place', minzoom: 16 },
+        { id: 'mascara', type: 'fill', source: 'mascara' },
+      ],
+    }
+    expect(dataMinZoom(style)).toBe(14)
+  })
+
+  it('counts a data layer without minzoom as zoom 0', () => {
+    const style = {
+      sources: { data: { type: 'vector', url: 'pmtiles://../x.pmtiles' } },
+      layers: [
+        { id: 'a', type: 'fill', source: 'data', minzoom: 13 },
+        { id: 'b', type: 'line', source: 'data' },
+      ],
+    }
+    expect(dataMinZoom(style)).toBe(0)
+  })
+
+  it('ignores inline and raster sources, and returns null without a data layer', () => {
+    const style = {
+      sources: { mascara: mask, imagery: { type: 'raster', tiles: ['https://example.org/{z}/{x}/{y}.png'] } },
+      layers: [
+        { id: 'mascara', type: 'fill', source: 'mascara', minzoom: 3 },
+        { id: 'imagery', type: 'raster', source: 'imagery', minzoom: 5 },
+      ],
+    }
+    expect(dataMinZoom(style)).toBeNull()
+    expect(dataMinZoom(null)).toBeNull()
   })
 })
