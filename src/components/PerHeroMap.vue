@@ -17,7 +17,7 @@
           <span class="per-hero-ramp" :style="{ background: `linear-gradient(90deg, ${legend.colors.join(', ')})` }" />
           <span class="per-hero-ends"><span>{{ legend.min }}</span><span>{{ legend.max }}</span></span>
         </template>
-        <span v-if="legend.note"><i v-if="legend.swatch" class="per-hero-swatch" :style="{ background: legend.swatch }" />{{ legend.note }}</span>
+        <span v-if="legend.note">{{ legend.note }}</span>
       </div>
     </div>
     <p v-if="credits" class="per-hero-credit">{{ credits }}</p>
@@ -370,14 +370,6 @@ export default {
   font-variant-numeric: tabular-nums;
 }
 
-.per-hero-swatch {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  margin-right: 6px;
-  border-radius: 2px;
-  vertical-align: -1px;
-}
 
 .per-hero-credit {
   position: absolute;

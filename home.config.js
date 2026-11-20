@@ -76,14 +76,9 @@ export default {
     background: '#e4e0e6',
 
     // Raster imagery under every view, bottom first. MapLibre requests a tile
-    // only inside `bounds` and between `minzoom` and `maxzoom`.
+    // only inside `bounds` and between `minzoom` and `maxzoom`. Outside the
+    // bounds, the map shows `background`.
     imagery: [
-      {
-        id: 'sentinel-2',
-        tiles: ['https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/g/{z}/{y}/{x}.jpg'],
-        maxzoom: 15,
-        attribution: 'Alrededores: Sentinel-2 cloudless 2016, EOX (CC BY 4.0)'
-      },
       {
         id: 'conae',
         tiles: ['https://geotematico01.conae.gov.ar/geoserver/gwc/service/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0'
@@ -103,8 +98,8 @@ export default {
     // collections fail to load still shows its imagery. The other keys of a
     // layer are MapLibre layer properties (`type`, `filter`, `paint`).
     //
-    // `legend.colors` draws a colour ramp, and `legend.swatch` a single colour
-    // before the note. `attribution` joins the imagery credits under the map.
+    // `legend.colors` draws a colour ramp. `attribution` joins the imagery
+    // credits under the map.
     views: [
       {
         id: 'edificios',
@@ -114,14 +109,8 @@ export default {
         attribution: 'Edificios: Catastro, Municipalidad de Pergamino',
         layers: [
           {
-            // `clase` is "cubierto", "semicubierto" or "pileta".
-            // `alt-piso` is the storey height in metres. Pools have 0.
-            collection: 'catastro/edificaciones_pb',
-            type: 'fill',
-            filter: ['==', ['get', 'clase'], 'pileta'],
-            paint: { 'fill-color': '#35b8e0', 'fill-opacity': 0.95 }
-          },
-          {
+            // `clase` is "cubierto", "semicubierto" or "pileta". The map
+            // leaves out pools. `alt-piso` is the storey height in metres.
             collection: 'catastro/edificaciones_pb',
             type: 'fill-extrusion',
             filter: ['!=', ['get', 'clase'], 'pileta'],
@@ -134,12 +123,13 @@ export default {
             }
           },
           {
-            // Upper floors start on the ground floor. `pisos` counts the
+            // Upper floors start on the ground floor. Rooftop pools stay out. `pisos` counts the
             // storeys of this footprint and arrives as a string. The colour
             // follows the height of the top: 6 m for one storey, 39 m at most
             // in the November 2026 data.
             collection: 'catastro/edificaciones_pa',
             type: 'fill-extrusion',
+            filter: ['!=', ['get', 'clase'], 'pileta'],
             paint: {
               'fill-extrusion-base': 3,
               'fill-extrusion-height': ['+', 3, ['*', ['to-number', ['get', 'pisos'], 1], ['coalesce', ['get', 'alt-piso'], 3]]],
@@ -156,49 +146,15 @@ export default {
           colors: ['#efe7dc', '#f6dc8a', '#fbcd49', '#f59a8f', '#f07faf', '#c42a72'],
           min: '3 m',
           max: '39 m',
-          swatch: '#35b8e0',
-          note: 'Piletas · pasá el cursor por un edificio'
+          note: 'Pasá el cursor por un edificio'
         },
         tooltip: p => {
           if (p.pisos) {
             return { title: `${p.pisos} ${Number(p.pisos) === 1 ? 'piso' : 'pisos'} en planta alta`, text: p.barrio };
           }
-          const kind = { pileta: 'Pileta', cubierto: 'Construcción cubierta', semicubierto: 'Construcción semicubierta' };
+          const kind = { cubierto: 'Construcción cubierta', semicubierto: 'Construcción semicubierta' };
           return { title: kind[p.clase] || 'Construcción', text: p.barrio };
         }
-      },
-      {
-        id: 'densidad',
-        label: 'Densidad',
-        camera: { center: [-60.572, -33.892], zoom: 13.3, pitch: 54, bearing: -28 },
-        imagery: { brightness: 0.7, saturation: -0.4 },
-        attribution: 'Densidad: INDEC',
-        layers: [
-          {
-            collection: 'demografia/habitantes_por_manzana_provisorio_2022',
-            type: 'fill-extrusion',
-            paint: {
-              'fill-extrusion-color': ['interpolate', ['linear'], ['coalesce', ['get', 'densidad_proyeccion_habitantes_2022'], 0],
-                0, '#8c8490', 10, '#fbcd49', 60, '#f59a8f', 150, '#f07faf', 375, '#c42a72'],
-              'fill-extrusion-height': ['interpolate', ['linear'], ['coalesce', ['get', 'densidad_proyeccion_habitantes_2022'], 0],
-                0, 2, 375, 450],
-              'fill-extrusion-opacity': 0.92,
-              'fill-extrusion-vertical-gradient': true
-            }
-          }
-        ],
-        legend: {
-          title: 'Habitantes por hectárea, proyección 2022',
-          colors: ['#8c8490', '#fbcd49', '#f59a8f', '#f07faf', '#c42a72'],
-          min: '0',
-          max: '375',
-          note: 'Pasá el cursor por una manzana'
-        },
-        tooltip: p => ({
-          title: p.barrio || 'Manzana',
-          text: `${Math.round(p.proyeccion_habitantes_2022 || 0).toLocaleString('es-AR')} habitantes · `
-            + `${Math.round(p.densidad_proyeccion_habitantes_2022 || 0).toLocaleString('es-AR')} hab/ha`
-        })
       },
       {
         id: 'satelite',

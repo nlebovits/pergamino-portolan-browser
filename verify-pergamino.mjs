@@ -326,11 +326,13 @@ if (hero) {
     if (!m) return null;
     const layers = m.getStyle().layers.filter(l => l.source && l.source.startsWith('pmtiles-'));
     const visible = layers.filter(l => (l.layout || {}).visibility !== 'none').map(l => l.id);
-    return { layers: layers.length, visible, rendered: visible.length ? m.queryRenderedFeatures({ layers: visible }).length : 0, pitch: m.getPitch() };
+    const features = visible.length ? m.queryRenderedFeatures({ layers: visible }) : [];
+    return { layers: layers.length, visible, rendered: features.length, pools: features.filter(f => f.properties.clase === 'pileta').length, pitch: m.getPitch() };
   })()`);
   const expectLayers = hero.views.reduce((n, v) => n + (v.layers || []).length, 0);
   check(`hero map adds ${expectLayers} catalog layers`, heroMap?.layers === expectLayers, `${heroMap?.layers} layers`);
   check('first view draws features', (heroMap?.rendered || 0) > 0, `${heroMap?.rendered} features, pitch ${heroMap?.pitch?.toFixed(0)}`);
+  check('first view draws no pools', heroMap?.pools === 0, `${heroMap?.pools} pools`);
   await page.locator('.per-hero-views button', { hasText: hero.views[1].label }).click();
   await page.waitForTimeout(2500);
   const second = await page.evaluate(`(() => { const m = ${MAP_PROBE}; return m.getStyle().layers.filter(l => l.source && l.source.startsWith('pmtiles-') && (l.layout || {}).visibility !== 'none').map(l => l.id); })()`);
