@@ -1,8 +1,14 @@
 name: Deploy to GitHub Pages
-# IDE Pergamino: deploy by hand only. A push to main does not publish the
-# site. Run this workflow when a deployment is approved.
+# IDE Pergamino: each push to main publishes the site. Run this workflow by
+# hand to publish main again without a new commit.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
+# A newer push replaces a deployment that has not finished.
+concurrency:
+  group: deploy-pages
+  cancel-in-progress: true
 jobs:
   deploy:
     runs-on: ubuntu-latest

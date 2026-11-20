@@ -110,7 +110,7 @@ few conflicts.
 | `tests/unit/perHome.spec.js`, `tests/unit/perTileCache.spec.js` | Unit tests for the home accessors and the tile cache |
 | `basemaps.config.js` | `MAP_CONSTRAINTS`, from the bbox of `limites/partido_pergamino` |
 | `verify-pergamino.mjs` | Browser checks at desktop and mobile size |
-| `.github/workflows/deploy-demo.yml` | Manual deploy only. A push to `main` does not publish. |
+| `.github/workflows/deploy-demo.yml` | Publishes the site to GitHub Pages on each push to `main`. A manual run publishes `main` again. |
 
 Brand values have one home, the `$per-*` variables in `variables.scss`. Do not
 put a hex literal in a component. Map colours are data styles, so they live
