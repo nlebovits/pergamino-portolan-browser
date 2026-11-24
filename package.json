@@ -5,6 +5,7 @@
   "type": "module",
   "description": "A web viewer for Portolan catalogs, forked from STAC Browser.",
   "main": "src/main.js",
+  "packageManager": "pnpm@10.34.9",
   "scripts": {
     "start": "vite",
     "build": "vite build",

@@ -66,7 +66,7 @@ docker run -p 8080:8080 -e SB_catalogUrl="https://earth-search.aws.element84.com
 docker run -p 8080:8080 -e SB_pathPrefix="/browser/" -e SB_catalogUrl="https://earth-search.aws.element84.com/v1/" stac-browser:v1
 ```
 
-If you want to pass all the other arguments to `npm run build` directly, you can modify to the Dockerfile as needed.
+If you want to pass all the other arguments to `pnpm run build` directly, you can modify to the Dockerfile as needed.
 
 STAC Browser is now available at `http://localhost:8080/browser/`.
 Requests to `http://localhost:8080/browser` (no trailing slash) are redirected there.
@@ -88,7 +88,7 @@ services:
 ## How it works
 
 The docker image uses a multi stage build.
-The first stage is based on a node image and runs `npm run build` to produce a `/dist` folder with static files (HTML, CSS, and JavaScript).
+The first stage is based on a node image. It installs the dependency versions recorded in `pnpm-lock.yaml`, using the pnpm release named in the `packageManager` field of `package.json`, and runs `pnpm run build` to produce a `/dist` folder with static files (HTML, CSS, and JavaScript).
 The second stage is based on an nginx image that serves the folder with static files. At startup, the entrypoint applies `SB_pathPrefix` to nginx and generates `runtime-config.js`.
 So, essentially, in the end you get an nginx instance that serves static files.
 
