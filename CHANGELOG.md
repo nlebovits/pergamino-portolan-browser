@@ -49,6 +49,10 @@ Portolan Browser 0.1.0 forked from upstream 5.1.0-dev.
 
 ### Fixed
 
+- The Docker image installs the dependency versions in `pnpm-lock.yaml`. Since the lockfile
+  moved from npm to pnpm, the image ran `npm install` with no lockfile and took the newest
+  version each range allowed, so it shipped code that CI never tested. The build stage also
+  uses a pinned Node 26 image instead of `node:lts-alpine`
 - A raster layer no longer paints over the map controls: the layer picker, the style
   picker and the map notices stayed clickable but became invisible behind an enabled COG
 - Band statistics are read from `raster:bands` as well as `bands`, so a raster-extension
